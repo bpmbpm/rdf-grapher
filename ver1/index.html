@@ -143,13 +143,14 @@
         /* Область вывода графа */
         #output {
             text-align: center;
-            overflow: auto;
-            max-width: 100%;
+            /* overflow и max-width убраны для работы с zoom-container */
+            display: inline-block;
         }
 
         /* SVG изображение графа */
         #output svg {
-            max-width: 100%;
+            /* Убираем ограничение max-width для возможности масштабирования */
+            /* max-width: 100%; */
             height: auto;
         }
 
@@ -198,6 +199,53 @@
 
         .export-buttons button:hover {
             background-color: #1976D2;
+        }
+
+        /* Контейнер с масштабированием */
+        .zoom-container {
+            position: relative;
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            min-height: 300px;
+            max-height: 70vh;
+        }
+
+        /* Контейнер внутри для масштабирования */
+        .zoom-content {
+            transform-origin: top left;
+            transition: transform 0.2s ease;
+        }
+
+        /* Панель управления масштабом */
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .zoom-controls button {
+            padding: 8px 15px;
+            margin: 0;
+            font-size: 14px;
+            background-color: #607D8B;
+        }
+
+        .zoom-controls button:hover {
+            background-color: #455A64;
+        }
+
+        .zoom-controls span {
+            min-width: 60px;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
         }
 
         /* Информация о технологиях */
@@ -330,8 +378,20 @@ ex:jane a foaf:Person ;
     <!-- Контейнер для результата -->
     <div class="result-container" id="result-container">
         <h2>Результат:</h2>
-        <!-- Область вывода графа -->
-        <div id="output"></div>
+        <!-- Панель управления масштабом -->
+        <div class="zoom-controls" id="zoom-controls" style="display: none;">
+            <button onclick="zoomOut()">−</button>
+            <span id="zoom-level">100%</span>
+            <button onclick="zoomIn()">+</button>
+            <button onclick="zoomReset()">Сброс</button>
+            <button onclick="zoomFit()">Вписать</button>
+        </div>
+        <!-- Область вывода графа с масштабированием -->
+        <div class="zoom-container" id="zoom-container">
+            <div class="zoom-content" id="zoom-content">
+                <div id="output"></div>
+            </div>
+        </div>
         <!-- Кнопки экспорта -->
         <div class="export-buttons" id="export-buttons" style="display: none;">
             <button onclick="downloadSVG()">Скачать SVG</button>
@@ -383,6 +443,93 @@ ex:jane a foaf:Person ;
 
         // Глобальная переменная для хранения текущего SVG
         let currentSvgElement = null;
+
+        // Глобальная переменная для хранения текущего масштаба
+        let currentScale = 1.0;
+
+        // Глобальная переменная для хранения префиксов
+        let currentPrefixes = {};
+
+        /**
+         * Применяет текущий масштаб к контейнеру с графом
+         */
+        function applyZoom() {
+            const zoomContent = document.getElementById('zoom-content');
+            const zoomLevel = document.getElementById('zoom-level');
+
+            if (zoomContent) {
+                zoomContent.style.transform = `scale(${currentScale})`;
+            }
+            if (zoomLevel) {
+                zoomLevel.textContent = Math.round(currentScale * 100) + '%';
+            }
+        }
+
+        /**
+         * Увеличивает масштаб на 10%
+         */
+        function zoomIn() {
+            if (currentScale < 3.0) {
+                currentScale += 0.1;
+                applyZoom();
+            }
+        }
+
+        /**
+         * Уменьшает масштаб на 10%
+         */
+        function zoomOut() {
+            if (currentScale > 0.1) {
+                currentScale -= 0.1;
+                applyZoom();
+            }
+        }
+
+        /**
+         * Сбрасывает масштаб к 100%
+         */
+        function zoomReset() {
+            currentScale = 1.0;
+            applyZoom();
+        }
+
+        /**
+         * Вписывает граф в видимую область контейнера
+         */
+        function zoomFit() {
+            const zoomContainer = document.getElementById('zoom-container');
+            const output = document.getElementById('output');
+            const svg = output ? output.querySelector('svg') : null;
+
+            if (!zoomContainer || !svg) {
+                return;
+            }
+
+            // Получаем размеры контейнера
+            const containerWidth = zoomContainer.clientWidth - 20; // с учетом padding
+            const containerHeight = zoomContainer.clientHeight - 20;
+
+            // Получаем размеры SVG
+            let svgWidth = parseFloat(svg.getAttribute('width')) || svg.getBoundingClientRect().width;
+            let svgHeight = parseFloat(svg.getAttribute('height')) || svg.getBoundingClientRect().height;
+
+            // Если размеры в pt, конвертируем
+            const widthStr = svg.getAttribute('width') || '';
+            const heightStr = svg.getAttribute('height') || '';
+            if (widthStr.includes('pt')) {
+                svgWidth = parseFloat(widthStr) * 1.33;
+            }
+            if (heightStr.includes('pt')) {
+                svgHeight = parseFloat(heightStr) * 1.33;
+            }
+
+            // Вычисляем масштаб для вписывания
+            const scaleX = containerWidth / svgWidth;
+            const scaleY = containerHeight / svgHeight;
+            currentScale = Math.min(scaleX, scaleY, 1.0); // не более 100%
+
+            applyZoom();
+        }
 
         /**
          * Загружает пример RDF данных в формате Turtle
@@ -534,6 +681,33 @@ ex:organizations {
         }
 
         /**
+         * Получает имя с префиксом из URI, используя известные префиксы
+         * Например: http://xmlns.com/foaf/0.1/Person -> foaf:Person
+         *
+         * @param {string} uri - Полный URI
+         * @param {Object} prefixes - Объект с префиксами (prefix -> namespace)
+         * @returns {string} - Имя с префиксом или локальное имя
+         */
+        function getPrefixedName(uri, prefixes) {
+            // Если это не строка, возвращаем как есть
+            if (typeof uri !== 'string') {
+                return String(uri);
+            }
+
+            // Ищем подходящий префикс
+            for (const [prefix, namespace] of Object.entries(prefixes)) {
+                if (uri.startsWith(namespace)) {
+                    const localName = uri.substring(namespace.length);
+                    // Возвращаем prefixed name (например, foaf:Person)
+                    return prefix + ':' + localName;
+                }
+            }
+
+            // Если префикс не найден, возвращаем локальное имя
+            return getLocalName(uri);
+        }
+
+        /**
          * Экранирует специальные символы для использования в DOT-формате
          *
          * @param {string} str - Исходная строка
@@ -565,12 +739,16 @@ ex:organizations {
          * Преобразует RDF триплеты в DOT-код для Graphviz
          *
          * @param {Array} quads - Массив RDF триплетов (quads)
+         * @param {Object} prefixes - Объект с префиксами (prefix -> namespace)
          * @returns {string} - DOT-код графа
          */
-        function rdfToDot(quads) {
+        function rdfToDot(quads, prefixes = {}) {
             // Множества для хранения уникальных узлов и ребер
             const nodes = new Map(); // Карта: значение -> ID узла
             const edges = [];        // Массив ребер
+
+            // Множество использованных префиксов для блока Namespaces
+            const usedPrefixes = new Set();
 
             // Обрабатываем каждый триплет
             quads.forEach(quad => {
@@ -584,12 +762,21 @@ ex:organizations {
                 const predicateValue = predicate.value;
                 const objectValue = object.value;
 
-                // Получаем локальные имена для читаемости
-                const subjectLabel = getLocalName(subjectValue);
-                const predicateLabel = getLocalName(predicateValue);
+                // Получаем имена с префиксами для читаемости
+                const subjectLabel = getPrefixedName(subjectValue, prefixes);
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
                 const objectLabel = object.termType === 'Literal'
                     ? `"${objectValue}"`
-                    : getLocalName(objectValue);
+                    : getPrefixedName(objectValue, prefixes);
+
+                // Отслеживаем использованные префиксы
+                for (const [prefix, namespace] of Object.entries(prefixes)) {
+                    if (subjectValue.startsWith(namespace) ||
+                        predicateValue.startsWith(namespace) ||
+                        (object.termType !== 'Literal' && objectValue.startsWith(namespace))) {
+                        usedPrefixes.add(prefix);
+                    }
+                }
 
                 // Создаем узлы, если они еще не существуют
                 if (!nodes.has(subjectValue)) {
@@ -628,6 +815,24 @@ ex:organizations {
             dot += '    node [fontname="Arial"];\n';
             dot += '    edge [fontname="Arial", fontsize=10];\n';
             dot += '\n';
+
+            // Добавляем блок Namespaces (префиксы), если есть использованные префиксы
+            if (usedPrefixes.size > 0) {
+                dot += '    // Блок Namespaces (префиксы)\n';
+
+                // Формируем текст для блока Namespaces
+                let namespacesText = 'Namespaces:\\l';
+                const sortedPrefixes = Array.from(usedPrefixes).sort();
+                for (const prefix of sortedPrefixes) {
+                    const namespace = prefixes[prefix];
+                    namespacesText += `${prefix}: ${namespace}\\l`;
+                }
+
+                // Добавляем узел с Namespaces (выравнивание справа внизу)
+                dot += `    namespaces [label="${escapeDotString(namespacesText)}", shape=box, style=filled, fillcolor="#f0f0f0", fontsize=10, fontname="Courier"];\n`;
+                dot += '    { rank=sink; namespaces; }\n';
+                dot += '\n';
+            }
 
             // Добавляем узлы
             dot += '    // Узлы графа\n';
@@ -676,8 +881,9 @@ ex:organizations {
                 </div>
             `;
 
-            // Скрываем кнопки экспорта во время загрузки
+            // Скрываем кнопки экспорта и управление масштабом во время загрузки
             document.getElementById('export-buttons').style.display = 'none';
+            document.getElementById('zoom-controls').style.display = 'none';
         }
 
         /**
@@ -692,8 +898,9 @@ ex:organizations {
             resultContainer.style.display = 'block';
             output.innerHTML = `<div class="error"><strong>Ошибка:</strong> ${message}</div>`;
 
-            // Скрываем кнопки экспорта при ошибке
+            // Скрываем кнопки экспорта и управление масштабом при ошибке
             document.getElementById('export-buttons').style.display = 'none';
+            document.getElementById('zoom-controls').style.display = 'none';
         }
 
         /**
@@ -726,11 +933,12 @@ ex:organizations {
                 // N3.Parser поддерживает Turtle, N-Triples, N-Quads и TriG
                 const parser = new N3.Parser({ format: inputFormat });
                 const quads = [];
+                let prefixes = {};
 
                 // Парсим RDF данные
                 // N3.js использует callback-based API
                 await new Promise((resolve, reject) => {
-                    parser.parse(rdfInput, (error, quad, prefixes) => {
+                    parser.parse(rdfInput, (error, quad, parsedPrefixes) => {
                         if (error) {
                             reject(error);
                             return;
@@ -739,10 +947,17 @@ ex:organizations {
                             quads.push(quad);
                         } else {
                             // null quad означает конец парсинга
+                            // parsedPrefixes содержит все найденные префиксы
+                            if (parsedPrefixes) {
+                                prefixes = parsedPrefixes;
+                            }
                             resolve();
                         }
                     });
                 });
+
+                // Сохраняем префиксы в глобальную переменную
+                currentPrefixes = prefixes;
 
                 // Проверяем, что получены триплеты
                 if (quads.length === 0) {
@@ -751,7 +966,8 @@ ex:organizations {
                 }
 
                 // Шаг 2: Генерация DOT-кода из RDF триплетов
-                const dotCode = rdfToDot(quads);
+                // Передаем префиксы для создания prefixed names
+                const dotCode = rdfToDot(quads, prefixes);
 
                 // Выводим DOT-код в консоль для отладки
                 console.log('Сгенерированный DOT-код:', dotCode);
@@ -770,13 +986,18 @@ ex:organizations {
                 // Отображаем результат
                 const output = document.getElementById('output');
 
+                // Сбрасываем масштаб перед отображением нового графа
+                currentScale = 1.0;
+                applyZoom();
+
                 if (outputFormat === 'svg') {
                     // Отображаем SVG напрямую
                     output.innerHTML = svgString;
                     currentSvgElement = output.querySelector('svg');
 
-                    // Показываем кнопки экспорта
+                    // Показываем кнопки экспорта и управление масштабом
                     document.getElementById('export-buttons').style.display = 'block';
+                    document.getElementById('zoom-controls').style.display = 'flex';
                 } else if (outputFormat === 'png') {
                     // Конвертируем SVG в PNG через Canvas
                     const pngDataUrl = await svgToPng(svgString);
@@ -788,12 +1009,14 @@ ex:organizations {
                     tempDiv.innerHTML = svgString;
                     currentSvgElement = tempDiv.querySelector('svg');
 
-                    // Показываем кнопки экспорта
+                    // Показываем кнопки экспорта и управление масштабом
                     document.getElementById('export-buttons').style.display = 'block';
+                    document.getElementById('zoom-controls').style.display = 'flex';
                 }
 
                 // Выводим статистику
                 console.log(`Обработано ${quads.length} триплетов`);
+                console.log('Найденные префиксы:', prefixes);
 
             } catch (error) {
                 // Обрабатываем ошибки парсинга или рендеринга
