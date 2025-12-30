@@ -336,7 +336,8 @@ ex:jane a foaf:Person ;
         <div class="export-buttons" id="export-buttons" style="display: none;">
             <button onclick="downloadSVG()">Скачать SVG</button>
             <button onclick="downloadPNG()">Скачать PNG</button>
-            <button onclick="openInNewWindow()">Показать в окне</button>
+            <button onclick="openInNewWindowGitHub()">Показать в окне github</button>
+            <button onclick="openInNewWindowLdfFi()">Показать в окне ldf.fi</button>
         </div>
     </div>
 
@@ -943,7 +944,7 @@ ex:organizations {
          * Открывает визуализацию в новом окне через внешний LDF сервис
          * Формирует URL с параметрами: rdf=данные&from=формат&to=png
          */
-        function openInNewWindow() {
+        function openInNewWindowLdfFi() {
             // Получаем входные данные
             const rdfInput = document.getElementById('rdf-input').value.trim();
             const inputFormat = document.getElementById('input-format').value;
@@ -966,6 +967,84 @@ ex:organizations {
 
             // Открываем в новом окне
             window.open(serviceUrl, '_blank');
+        }
+
+        /**
+         * Открывает визуализацию в новом окне через GitHub Pages (без внешнего сервиса)
+         * Использует текущий SVG граф, созданный локально через Viz.js
+         */
+        function openInNewWindowGitHub() {
+            // Проверяем, что граф был сгенерирован
+            if (!currentSvgElement) {
+                alert('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            // Получаем SVG код
+            const svgData = new XMLSerializer().serializeToString(currentSvgElement);
+
+            // Создаем HTML страницу с SVG графом
+            const htmlContent = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDF Graph - GitHub Pages</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 100%;
+            overflow: auto;
+        }
+        svg {
+            max-width: 100%;
+            height: auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RDF Graph</h1>
+        ${svgData}
+        <div class="footer">
+            Сгенерировано с помощью <a href="https://bpmbpm.github.io/rdf-grapher/ver1/">RDF Grapher</a> (GitHub Pages)
+        </div>
+    </div>
+</body>
+</html>`;
+
+            // Открываем новое окно и записываем в него HTML
+            const newWindow = window.open('', '_blank');
+            if (newWindow) {
+                newWindow.document.write(htmlContent);
+                newWindow.document.close();
+            } else {
+                alert('Не удалось открыть новое окно. Возможно, браузер заблокировал всплывающее окно.');
+            }
         }
 
         /**
