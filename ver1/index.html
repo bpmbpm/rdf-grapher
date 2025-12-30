@@ -241,7 +241,11 @@
             и нажмите кнопку "Визуализировать" для генерации графа.
         </p>
         <p>
-            <span class="example-link" onclick="loadExample()">Загрузить пример RDF данных (Turtle)</span>
+            <strong>Загрузить пример RDF данных:</strong>
+            <span class="example-link" onclick="loadExampleTurtle()">Turtle</span> |
+            <span class="example-link" onclick="loadExampleNTriples()">N-Triples</span> |
+            <span class="example-link" onclick="loadExampleNQuads()">N-Quads</span> |
+            <span class="example-link" onclick="loadExampleTriG()">TriG</span>
         </p>
     </div>
 
@@ -332,6 +336,7 @@ ex:jane a foaf:Person ;
         <div class="export-buttons" id="export-buttons" style="display: none;">
             <button onclick="downloadSVG()">Скачать SVG</button>
             <button onclick="downloadPNG()">Скачать PNG</button>
+            <button onclick="openInNewWindow()">Показать в окне</button>
         </div>
     </div>
 
@@ -379,12 +384,9 @@ ex:jane a foaf:Person ;
         let currentSvgElement = null;
 
         /**
-         * Загружает пример RDF данных в текстовое поле
-         * Пример демонстрирует синтаксис Turtle
+         * Загружает пример RDF данных в формате Turtle
          */
-        function loadExample() {
-            // Пример RDF данных в формате Turtle
-            // Описывает двух людей и связь между ними
+        function loadExampleTurtle() {
             const exampleRdf = `# Пример RDF данных в формате Turtle
 # Определение префиксов (сокращений для URI)
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
@@ -413,11 +415,93 @@ ex:company rdf:type foaf:Organization ;
     foaf:name "Example Corp" ;
     foaf:member ex:bob, ex:jane .`;
 
-            // Установка примера в текстовое поле
             document.getElementById('rdf-input').value = exampleRdf;
-
-            // Установка формата на Turtle
             document.getElementById('input-format').value = 'turtle';
+        }
+
+        /**
+         * Загружает пример RDF данных в формате N-Triples
+         */
+        function loadExampleNTriples() {
+            const exampleRdf = `# Пример RDF данных в формате N-Triples
+# Каждая строка содержит один триплет: субъект предикат объект .
+<http://example.org/john> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/name> "John Doe" .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/age> "30"^^<http://www.w3.org/2001/XMLSchema#integer> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/knows> <http://example.org/jane> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/knows> <http://example.org/bob> .
+<http://example.org/jane> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .
+<http://example.org/jane> <http://xmlns.com/foaf/0.1/name> "Jane Smith" .
+<http://example.org/jane> <http://xmlns.com/foaf/0.1/knows> <http://example.org/john> .
+<http://example.org/bob> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .
+<http://example.org/bob> <http://xmlns.com/foaf/0.1/name> "Bob Wilson" .
+<http://example.org/bob> <http://xmlns.com/foaf/0.1/workplaceHomepage> <http://example.org/company> .
+<http://example.org/company> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Organization> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/name> "Example Corp" .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/member> <http://example.org/bob> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/member> <http://example.org/jane> .`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'n-triples';
+        }
+
+        /**
+         * Загружает пример RDF данных в формате N-Quads
+         */
+        function loadExampleNQuads() {
+            const exampleRdf = `# Пример RDF данных в формате N-Quads
+# Формат: субъект предикат объект граф .
+# N-Quads расширяет N-Triples добавлением именованных графов
+<http://example.org/john> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> <http://example.org/people> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/name> "John Doe" <http://example.org/people> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/knows> <http://example.org/jane> <http://example.org/people> .
+<http://example.org/jane> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> <http://example.org/people> .
+<http://example.org/jane> <http://xmlns.com/foaf/0.1/name> "Jane Smith" <http://example.org/people> .
+<http://example.org/company> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Organization> <http://example.org/organizations> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/name> "Example Corp" <http://example.org/organizations> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/member> <http://example.org/john> <http://example.org/organizations> .`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'n-quads';
+        }
+
+        /**
+         * Загружает пример RDF данных в формате TriG
+         */
+        function loadExampleTriG() {
+            const exampleRdf = `# Пример RDF данных в формате TriG
+# TriG расширяет Turtle добавлением именованных графов
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# Граф с информацией о людях
+ex:people {
+    ex:john rdf:type foaf:Person ;
+        foaf:name "John Doe" ;
+        foaf:knows ex:jane .
+
+    ex:jane rdf:type foaf:Person ;
+        foaf:name "Jane Smith" ;
+        foaf:knows ex:john .
+}
+
+# Граф с информацией об организациях
+ex:organizations {
+    ex:company rdf:type foaf:Organization ;
+        foaf:name "Example Corp" ;
+        foaf:member ex:john, ex:jane .
+}`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'trig';
+        }
+
+        /**
+         * Для обратной совместимости: вызывает загрузку примера Turtle
+         */
+        function loadExample() {
+            loadExampleTurtle();
         }
 
         /**
@@ -843,6 +927,45 @@ ex:company rdf:type foaf:Organization ;
                 console.error('Ошибка при скачивании PNG:', error);
                 alert('Ошибка при создании PNG файла');
             }
+        }
+
+        /**
+         * Маппинг внутренних форматов на форматы параметров LDF сервиса
+         */
+        const formatMapping = {
+            'turtle': 'ttl',
+            'n-triples': 'nt',
+            'n-quads': 'nq',
+            'trig': 'trig'
+        };
+
+        /**
+         * Открывает визуализацию в новом окне через внешний LDF сервис
+         * Формирует URL с параметрами: rdf=данные&from=формат&to=png
+         */
+        function openInNewWindow() {
+            // Получаем входные данные
+            const rdfInput = document.getElementById('rdf-input').value.trim();
+            const inputFormat = document.getElementById('input-format').value;
+
+            // Проверяем, что данные введены
+            if (!rdfInput) {
+                alert('Пожалуйста, введите RDF данные');
+                return;
+            }
+
+            // Получаем формат для параметра URL
+            const fromFormat = formatMapping[inputFormat] || 'ttl';
+
+            // Кодируем RDF данные для URL
+            // Заменяем пробелы на + для совместимости с LDF сервисом
+            const encodedRdf = encodeURIComponent(rdfInput).replace(/%20/g, '+');
+
+            // Формируем URL для внешнего сервиса
+            const serviceUrl = `https://www.ldf.fi/service/rdf-grapher?rdf=${encodedRdf}&from=${fromFormat}&to=png`;
+
+            // Открываем в новом окне
+            window.open(serviceUrl, '_blank');
         }
 
         /**
