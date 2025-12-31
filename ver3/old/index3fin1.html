@@ -1,0 +1,4424 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDF Grapher ver3 - Визуализация RDF данных с режимом агрегации</title>
+
+    <!--
+        RDF Grapher ver3 - Сервис для парсинга RDF данных и их визуализации в виде графа
+
+        Новые возможности ver3:
+        - Режим агрегации: все литералы помещаются в общий узел
+        - Мелкий шрифт для литералов, кроме name/label
+        - Настраиваемые стили для узлов (node) на основе RDF-типов объектов
+        - Настраиваемые стили для ребер (edge) на основе предикатов
+        - Конфигурация стилей в формате DOT-параметров
+
+        Этот сервис является аналогом https://www.ldf.fi/service/rdf-grapher
+        Использует клиентские JavaScript библиотеки:
+        - N3.js для парсинга RDF (замена Redland Raptor)
+        - Viz.js для рендеринга графов (замена Graphviz)
+
+        Сервис работает полностью на стороне клиента и может быть размещен на GitHub Pages
+    -->
+
+    <!-- Стили для интерфейса -->
+    <style>
+        /* Основные стили страницы */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            /* Шрифт и базовые настройки */
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        /* Заголовок страницы */
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+
+        /* Описание сервиса */
+        .description {
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        /* Основной контейнер формы */
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Метки полей формы */
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        /* Текстовое поле для ввода RDF */
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        /* Фокус на текстовом поле */
+        textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+
+        /* Контейнер для селекторов форматов */
+        .format-selectors {
+            display: flex;
+            gap: 20px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        /* Группа элементов формы */
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        /* Выпадающие списки */
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            background-color: white;
+        }
+
+        /* Кнопка визуализации */
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 15px;
+            transition: background-color 0.3s;
+        }
+
+        /* Эффект наведения на кнопку */
+        button:hover {
+            background-color: #45a049;
+        }
+
+        /* Отключенная кнопка */
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        /* Контейнер для результата */
+        .result-container {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        /* Область вывода графа */
+        #output {
+            text-align: center;
+            /* overflow и max-width убраны для работы с zoom-container */
+            display: inline-block;
+        }
+
+        /* SVG изображение графа */
+        #output svg {
+            /* Убираем ограничение max-width для возможности масштабирования */
+            /* max-width: 100%; */
+            height: auto;
+        }
+
+        /* Сообщение об ошибке */
+        .error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        /* Индикатор загрузки */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        /* Анимация спиннера загрузки */
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Кнопки экспорта */
+        .export-buttons {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .export-buttons button {
+            margin: 5px;
+            background-color: #2196F3;
+        }
+
+        .export-buttons button:hover {
+            background-color: #1976D2;
+        }
+
+        /* Контейнер с масштабированием */
+        .zoom-container {
+            position: relative;
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            min-height: 300px;
+            max-height: 70vh;
+        }
+
+        /* Контейнер внутри для масштабирования */
+        .zoom-content {
+            transform-origin: top left;
+            transition: transform 0.2s ease;
+        }
+
+        /* Панель управления масштабом */
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .zoom-controls button {
+            padding: 8px 15px;
+            margin: 0;
+            font-size: 14px;
+            background-color: #607D8B;
+        }
+
+        .zoom-controls button:hover {
+            background-color: #455A64;
+        }
+
+        .zoom-controls span {
+            min-width: 60px;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+        }
+
+        /* Информация о технологиях */
+        .tech-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff3e0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        /* Ссылки */
+        a {
+            color: #1976D2;
+        }
+
+        /* Пример RDF */
+        .example-link {
+            color: #4CAF50;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .example-link:hover {
+            color: #45a049;
+        }
+
+        /* Панель префиксов (Namespaces) */
+        .prefixes-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .prefixes-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .prefixes-content {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .prefix-line {
+            margin: 2px 0;
+        }
+
+        .prefix-name {
+            color: #6a1b9a;
+            font-weight: bold;
+        }
+
+        .prefix-url {
+            color: #1976D2;
+            text-decoration: none;
+        }
+
+        .prefix-url:hover {
+            text-decoration: underline;
+        }
+
+        /* Панель легенды стилей */
+        .legend-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .legend-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .legend-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .legend-section {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .legend-section h4 {
+            margin: 0 0 8px 0;
+            color: #555;
+            font-size: 13px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 5px 0;
+            font-size: 12px;
+        }
+
+        .legend-shape {
+            width: 30px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid;
+            font-size: 10px;
+        }
+
+        .legend-line {
+            width: 40px;
+            height: 3px;
+            display: inline-block;
+        }
+
+        .legend-label {
+            color: #333;
+        }
+
+        /* Панель свойств узла (справа, перетаскиваемая) */
+        .properties-panel {
+            position: fixed;
+            right: 20px;
+            top: 100px;
+            width: 350px;
+            max-height: 70vh;
+            background-color: white;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            resize: both;
+            min-width: 280px;
+            min-height: 200px;
+        }
+
+        .properties-panel.visible {
+            display: flex;
+        }
+
+        /* Контейнер для нескольких панелей свойств */
+        #properties-panels-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #properties-panels-container .properties-panel {
+            pointer-events: auto;
+        }
+
+        .properties-header {
+            padding: 15px;
+            background-color: #4CAF50;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            user-select: none;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .properties-header h3 {
+            margin: 0;
+            font-size: 14px;
+            word-break: break-all;
+            flex: 1;
+            padding-right: 10px;
+        }
+
+        .properties-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0 5px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .properties-close-btn:hover {
+            opacity: 0.8;
+        }
+
+        /* Режим визуализации */
+        .mode-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+            padding: 10px 15px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+
+        .mode-selector label {
+            margin: 0;
+            font-weight: normal;
+        }
+
+        .mode-selector select {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .mode-description {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* SPARQL панель */
+        .sparql-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .sparql-panel.visible {
+            display: block;
+        }
+
+        .sparql-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .sparql-query-textarea {
+            width: 100%;
+            height: 120px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            resize: vertical;
+            margin-bottom: 10px;
+        }
+
+        .sparql-query-textarea:focus {
+            outline: none;
+            border-color: #9C27B0;
+            box-shadow: 0 0 5px rgba(156, 39, 176, 0.3);
+        }
+
+        .sparql-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .sparql-buttons button {
+            background-color: #9C27B0;
+            margin-top: 0;
+        }
+
+        .sparql-buttons button:hover {
+            background-color: #7B1FA2;
+        }
+
+        .sparql-results {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow: auto;
+        }
+
+        .sparql-results h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 13px;
+        }
+
+        .sparql-results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .sparql-results-table th {
+            background-color: #9C27B0;
+            color: white;
+            padding: 8px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .sparql-results-table td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            word-break: break-all;
+        }
+
+        .sparql-results-table tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .sparql-results-table .uri {
+            color: #1976D2;
+        }
+
+        .sparql-results-table .literal {
+            color: #6a1b9a;
+        }
+
+        .sparql-error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .sparql-loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .properties-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .property-item {
+            margin-bottom: 12px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 3px solid #4CAF50;
+        }
+
+        .property-predicate {
+            color: #1976D2;
+            font-weight: bold;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .property-value {
+            color: #333;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        .property-value.literal {
+            color: #6a1b9a;
+        }
+
+        .property-value.uri {
+            color: #1976D2;
+        }
+
+        .properties-empty {
+            color: #666;
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .properties-type-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        /* Стили для кликабельных узлов в SVG */
+        #output svg .node {
+            cursor: pointer;
+        }
+
+        #output svg .node:hover {
+            opacity: 0.8;
+        }
+
+        /* Индикатор выбранного узла */
+        #output svg .node.selected polygon,
+        #output svg .node.selected ellipse,
+        #output svg .node.selected path {
+            stroke-width: 3;
+            stroke: #FF5722;
+        }
+
+        /* Панель фильтров */
+        .filter-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #fff8e1;
+            border: 1px solid #ffcc02;
+            border-radius: 8px;
+        }
+
+        .filter-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .filter-controls button {
+            padding: 6px 12px;
+            font-size: 12px;
+            margin-top: 0;
+            background-color: #FFA000;
+        }
+
+        .filter-controls button:hover {
+            background-color: #FF8F00;
+        }
+
+        .filter-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .filter-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .filter-item label {
+            margin: 0;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        /* Кликабельные строки в таблице SPARQL результатов */
+        .sparql-results-table tr.clickable {
+            cursor: pointer;
+        }
+
+        .sparql-results-table tr.clickable:hover {
+            background-color: #e3f2fd !important;
+        }
+
+        .sparql-results-table tr.highlighted {
+            background-color: #fff3e0 !important;
+            outline: 2px solid #FF5722;
+        }
+    </style>
+</head>
+<body>
+    <!-- Контейнер для панелей свойств узлов (отображаются при клике на узел графа) -->
+    <div id="properties-panels-container"></div>
+
+    <!-- Заголовок страницы -->
+    <h1>RDF Grapher ver3</h1>
+
+    <!-- Описание сервиса -->
+    <div class="description">
+        <p>
+            <strong>RDF Grapher ver3</strong> — сервис для парсинга RDF данных и их визуализации в виде графа
+            с настраиваемыми стилями для узлов и ребер, а также режимом агрегации.
+            Этот сервис является расширенным аналогом <a href="https://www.ldf.fi/service/rdf-grapher" target="_blank">LDF RDF Grapher</a>.
+        </p>
+        <p>
+            <strong>Новые возможности:</strong>
+            <ul>
+                <li><strong>Режим агрегации:</strong> литералы агрегируются в общий узел с мелким шрифтом</li>
+                <li>Настраиваемые стили для узлов (node) на основе RDF-типов объектов</li>
+                <li>Настраиваемые стили для ребер (edge) на основе предикатов</li>
+                <li>Легенда с отображением всех используемых стилей</li>
+            </ul>
+        </p>
+        <p>
+            <strong>Загрузить пример RDF данных:</strong>
+            <span class="example-link" onclick="loadExampleTurtle()">Turtle</span> |
+            <span class="example-link" onclick="loadExampleNTriples()">N-Triples</span> |
+            <span class="example-link" onclick="loadExampleNQuads()">N-Quads</span> |
+            <span class="example-link" onclick="loadExampleTriG()">TriG</span>
+        </p>
+    </div>
+
+    <!-- Основная форма -->
+    <div class="container">
+        <!-- Метка для текстового поля -->
+        <label for="rdf-input">RDF данные или URI:</label>
+
+        <!-- Текстовое поле для ввода RDF -->
+        <textarea id="rdf-input" placeholder="Введите RDF данные в формате Turtle, N-Triples, N-Quads или TriG...
+
+Пример (Turtle):
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+
+ex:john a foaf:Person ;
+    foaf:name &quot;John Doe&quot; ;
+    foaf:knows ex:jane .
+
+ex:jane a foaf:Person ;
+    foaf:name &quot;Jane Smith&quot; ."></textarea>
+
+        <!-- Селекторы форматов -->
+        <div class="format-selectors">
+            <!-- Выбор входного формата -->
+            <div class="form-group">
+                <label for="input-format">Входной формат:</label>
+                <select id="input-format">
+                    <!--
+                        Поддерживаемые входные форматы:
+                        - Turtle (.ttl) - наиболее читаемый формат
+                        - N-Triples (.nt) - простой построчный формат
+                        - N-Quads (.nq) - N-Triples с именованными графами
+                        - TriG (.trig) - Turtle с именованными графами
+                    -->
+                    <option value="turtle" selected>Turtle</option>
+                    <option value="n-triples">N-Triples</option>
+                    <option value="n-quads">N-Quads</option>
+                    <option value="trig">TriG</option>
+                </select>
+            </div>
+
+            <!-- Выбор выходного формата -->
+            <div class="form-group">
+                <label for="output-format">Выходной формат:</label>
+                <select id="output-format">
+                    <!--
+                        Поддерживаемые выходные форматы:
+                        - SVG - векторный формат, масштабируемый
+                        - PNG - растровый формат для скачивания
+                        - Drawio - формат для diagrams.net (несжатый XML)
+                    -->
+                    <option value="svg" selected>SVG</option>
+                    <option value="png">PNG</option>
+                    <option value="drawio">Drawio (несжатый)</option>
+                </select>
+            </div>
+
+            <!-- Выбор движка компоновки графа -->
+            <div class="form-group">
+                <label for="layout-engine">Движок компоновки:</label>
+                <select id="layout-engine">
+                    <!--
+                        Graphviz движки компоновки:
+                        - dot - иерархическая (направленные графы)
+                        - neato - spring model (ненаправленные графы)
+                        - fdp - force-directed placement
+                        - circo - круговая компоновка
+                        - twopi - радиальная компоновка
+                    -->
+                    <option value="dot" selected>dot (иерархическая)</option>
+                    <option value="neato">neato (spring model)</option>
+                    <option value="fdp">fdp (force-directed)</option>
+                    <option value="circo">circo (круговая)</option>
+                    <option value="twopi">twopi (радиальная)</option>
+                </select>
+            </div>
+
+            <!-- Выбор режима визуализации -->
+            <div class="form-group">
+                <label for="visualization-mode">Режим визуализации:</label>
+                <select id="visualization-mode" onchange="updateModeDescription()">
+                    <!--
+                        Режимы визуализации:
+                        - notation - с выделением объектов и предикатов цветом и формами (по умолчанию)
+                        - base - базовый режим без специальных стилей (как в ver1)
+                        - aggregation - режим агрегации: литералы объединяются в общий узел
+                    -->
+                    <option value="notation" selected>Режим нотации</option>
+                    <option value="base">Базовый режим</option>
+                    <option value="aggregation">Режим агрегации</option>
+                </select>
+                <div class="mode-description" id="mode-description">
+                    С выделением типов объектов и предикатов цветом и формами
+                </div>
+            </div>
+
+            <!-- Выбор режима SPARQL -->
+            <div class="form-group">
+                <label for="sparql-mode">Режим SPARQL:</label>
+                <select id="sparql-mode" onchange="toggleSparqlPanel()">
+                    <!--
+                        Режим SPARQL:
+                        - no - без SPARQL запросов (по умолчанию)
+                        - yes - с панелью SPARQL запросов
+                    -->
+                    <option value="no" selected>No</option>
+                    <option value="yes">Yes</option>
+                </select>
+                <div class="mode-description" id="sparql-mode-description">
+                    Включите для выполнения SPARQL запросов к графу
+                </div>
+            </div>
+
+            <!-- Максимальная длина наименования (для режимов агрегации и нотации) -->
+            <div class="form-group" id="max-label-length-group">
+                <label for="max-label-length">Макс. длина имени:</label>
+                <input type="number" id="max-label-length" value="25" min="5" max="200" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                <div class="mode-description" id="max-label-length-description">
+                    Перенос по словам при превышении (для агрегации/нотации)
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопка визуализации -->
+        <button id="visualize-btn" onclick="visualize()">Визуализировать</button>
+    </div>
+
+    <!-- Контейнер для результата -->
+    <div class="result-container" id="result-container">
+        <h2>Результат:</h2>
+        <!-- Панель управления масштабом -->
+        <div class="zoom-controls" id="zoom-controls" style="display: none;">
+            <button onclick="zoomOut()">-</button>
+            <span id="zoom-level">100%</span>
+            <button onclick="zoomIn()">+</button>
+            <button onclick="zoomReset()">Сброс</button>
+            <button onclick="zoomFit()">Вписать</button>
+        </div>
+        <!-- Область вывода графа с масштабированием -->
+        <div class="zoom-container" id="zoom-container">
+            <div class="zoom-content" id="zoom-content">
+                <div id="output"></div>
+            </div>
+        </div>
+        <!-- Кнопки экспорта -->
+        <div class="export-buttons" id="export-buttons" style="display: none;">
+            <button onclick="downloadSVG()">Скачать SVG</button>
+            <button onclick="downloadPNG()">Скачать PNG</button>
+            <button onclick="downloadDrawio()">Скачать Drawio</button>
+            <button onclick="openInNewWindowGitHub()">Показать в окне github</button>
+            <button onclick="openInNewWindowLdfFi()">Показать в окне ldf.fi</button>
+        </div>
+        <!-- Панель легенды стилей -->
+        <div class="legend-panel" id="legend-panel" style="display: none;">
+            <h3>Легенда стилей:</h3>
+            <div class="legend-content" id="legend-content"></div>
+        </div>
+        <!-- Панель префиксов (Namespaces) -->
+        <div class="prefixes-panel" id="prefixes-panel" style="display: none;">
+            <h3>Prefixes:</h3>
+            <div class="prefixes-content" id="prefixes-content"></div>
+        </div>
+        <!-- SPARQL панель (скрыта по умолчанию) -->
+        <div class="sparql-panel" id="sparql-panel">
+            <h3>SPARQL запрос:</h3>
+            <textarea class="sparql-query-textarea" id="sparql-query" placeholder="Введите SPARQL запрос...">SELECT ?s ?p ?o
+WHERE {
+    ?s ?p ?o .
+}</textarea>
+            <div class="sparql-buttons">
+                <button onclick="executeSparqlQuery()">Выполнить запрос</button>
+                <button onclick="resetSparqlQuery()">Сбросить</button>
+            </div>
+            <div class="sparql-results" id="sparql-results" style="display: none;">
+                <h4>Результаты запроса:</h4>
+                <div id="sparql-results-content"></div>
+            </div>
+        </div>
+        <!-- Панель фильтров (для обоих режимов, с разными настройками по умолчанию) -->
+        <div class="filter-panel" id="filter-panel" style="display: none;">
+            <h3>Фильтры типов:</h3>
+            <div class="filter-controls">
+                <button onclick="selectAllFilters()">Выделить все</button>
+                <button onclick="deselectAllFilters()">Снять все</button>
+            </div>
+            <div class="filter-content" id="filter-content"></div>
+        </div>
+    </div>
+
+    <!-- Информация об используемых технологиях -->
+    <div class="tech-info">
+        <h3>Используемые технологии:</h3>
+        <ul>
+            <li>
+                <strong>N3.js</strong> — JavaScript библиотека для парсинга RDF
+                (замена <a href="http://librdf.org/raptor/rapper.html" target="_blank">Redland Raptor</a>)
+                — <a href="https://github.com/rdfjs/N3.js" target="_blank">GitHub</a>
+            </li>
+            <li>
+                <strong>Viz.js</strong> — WebAssembly версия
+                <a href="http://graphviz.org/" target="_blank">Graphviz</a> для браузера
+                — <a href="https://github.com/mdaines/viz-js" target="_blank">GitHub</a>
+            </li>
+        </ul>
+        <p>
+            Этот сервис работает полностью на стороне клиента (в браузере)
+            и не требует серверной части, что позволяет размещать его на GitHub Pages.
+        </p>
+    </div>
+
+    <!-- Подключение библиотеки N3.js для парсинга RDF -->
+    <!-- N3.js - быстрый, спецификационно-совместимый парсер RDF для JavaScript -->
+    <script src="https://unpkg.com/n3@1.17.2/browser/n3.min.js"></script>
+
+    <!-- Подключение библиотеки Viz.js для рендеринга графов -->
+    <!-- Viz.js - WebAssembly сборка Graphviz для работы в браузере -->
+    <script src="https://unpkg.com/@viz-js/viz@3.4.0/lib/viz-standalone.js"></script>
+
+    <!-- Подключение библиотеки Comunica для SPARQL запросов -->
+    <!-- Comunica - модульный SPARQL движок для JavaScript -->
+    <script src="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql-rdfjs/comunica-browser.js"></script>
+
+    <script>
+        /**
+         * RDF Grapher ver2 - Основной JavaScript модуль
+         *
+         * Этот модуль отвечает за:
+         * 1. Парсинг RDF данных с помощью N3.js
+         * 2. Применение настраиваемых стилей для узлов и ребер
+         * 3. Генерацию DOT-кода для Graphviz с примененными стилями
+         * 4. Рендеринг графа с помощью Viz.js
+         * 5. Экспорт результата в SVG и PNG форматы
+         * 6. Отображение легенды стилей
+         * 7. Выполнение SPARQL запросов с помощью Comunica
+         */
+
+        // ============================================================================
+        // РЕЖИМ ВИЗУАЛИЗАЦИИ (Mode)
+        // ============================================================================
+
+        /**
+         * Mode - Режим визуализации по умолчанию
+         *
+         * Возможные значения:
+         * - 'base' - Базовый режим без выделения объектов и предикатов цветом и формами (как в ver1)
+         * - 'notation' - Режим нотации с выделением типов объектов и предикатов (по умолчанию)
+         */
+        const Mode = 'notation';
+
+        // ============================================================================
+        // КОНФИГУРАЦИЯ ФИЛЬТРОВ (Filter)
+        // ============================================================================
+
+        /**
+         * Filter - Конфигурация фильтров для режима нотации
+         *
+         * Фильтры позволяют скрывать определенные типы предикатов на схеме.
+         * Скрытые предикаты не отображаются в графе, но:
+         * - Окно свойств показывает полный набор свойств
+         * - SPARQL запросы обрабатывают все параметры
+         *
+         * hiddenPredicates - массив предикатов, скрытых по умолчанию
+         * Предикаты указываются в формате prefixed name или полного URI
+         */
+        const Filter = {
+            // Предикаты, скрытые по умолчанию (для режима нотации)
+            hiddenPredicates: [
+                'rdf:type',
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                'rdfs:subClassOf',
+                'http://www.w3.org/2000/01/rdf-schema#subClassOf'
+            ]
+        };
+
+        /**
+         * FilterBase - Конфигурация фильтров для базового режима
+         *
+         * В базовом режиме по умолчанию не скрываются никакие типы объектов.
+         * hiddenPredicates - пустой массив (все предикаты видимы по умолчанию)
+         */
+        const FilterBase = {
+            // В базовом режиме по умолчанию ничего не скрыто
+            hiddenPredicates: []
+        };
+
+        /**
+         * FilterAggregation - Конфигурация фильтров для режима агрегации
+         *
+         * В режиме агрегации скрываются rdf:type и rdfs:subClassOf,
+         * так же как и в режиме нотации.
+         * hiddenPredicates - массив предикатов, скрытых по умолчанию
+         */
+        const FilterAggregation = {
+            // Предикаты, скрытые по умолчанию (для режима агрегации)
+            hiddenPredicates: [
+                'rdf:type',
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                'rdfs:subClassOf',
+                'http://www.w3.org/2000/01/rdf-schema#subClassOf'
+            ]
+        };
+
+        /**
+         * Возвращает конфигурацию фильтров для текущего режима
+         *
+         * @param {string} mode - Режим визуализации ('base', 'notation' или 'aggregation')
+         * @returns {Object} - Конфигурация фильтров с hiddenPredicates
+         */
+        function getFilterConfig(mode) {
+            if (mode === 'base') {
+                return FilterBase;
+            } else if (mode === 'aggregation') {
+                return FilterAggregation;
+            }
+            return Filter;
+        }
+
+        // ============================================================================
+        // КОНФИГУРАЦИЯ АГРЕГАЦИИ (Aggregation)
+        // ============================================================================
+
+        /**
+         * MaxAggregationParams - Максимальное количество параметров (строк) для
+         * отображения в узле в режиме агрегации.
+         *
+         * В режиме агрегации все литералы помещаются в общий узел,
+         * и это значение ограничивает количество отображаемых строк.
+         */
+        const MaxAggregationParams = 5;
+
+        /**
+         * DEFAULT_MAX_LABEL_LENGTH - Максимальная длина наименования объекта (символов)
+         * по умолчанию для режимов агрегации и нотации.
+         *
+         * При превышении этого значения наименование переносится на несколько строк
+         * (по словам, без разрыва слов) и отображается более мелким шрифтом.
+         * В базовом режиме ограничение не применяется.
+         */
+        const DEFAULT_MAX_LABEL_LENGTH = 25;
+
+        /**
+         * Текущее значение максимальной длины наименования объекта.
+         * Может быть изменено пользователем в настройках.
+         */
+        let currentMaxLabelLength = DEFAULT_MAX_LABEL_LENGTH;
+
+        // ============================================================================
+        // КОНФИГУРАЦИЯ СТИЛЕЙ (StyleName)
+        // ============================================================================
+
+        /**
+         * StyleName - Конфигурация стилей визуализации
+         *
+         * СТРУКТУРА:
+         * 1. nodeStyles - стили для узлов (субъекты и объекты в RDF)
+         *    - Привязка типов RDF (например, 'foaf:Person') к стилям
+         *    - Формат параметров DOT: shape, color, fillcolor, fontname, fontsize, style, height, width, fixedsize
+         *
+         * 2. edgeStyles - стили для ребер (предикаты в RDF)
+         *    - Привязка предикатов (например, 'foaf:knows') к стилям
+         *    - Формат параметров DOT: color, penwidth, style (solid, dashed, dotted), arrowhead, arrowtail
+         *
+         * ВАЖНО:
+         * - Типы и предикаты указываются в формате prefixed name (prefix:localName)
+         * - Для каждого стиля можно указать массив типов/предикатов
+         * - Стиль 'default' применяется ко всем узлам/ребрам, не имеющим явного стиля
+         *
+         * ПРИМЕРЫ ПАРАМЕТРОВ DOT:
+         * - shape: box, ellipse, circle, diamond, octagon, hexagon, parallelogram, triangle, star
+         * - style: filled, bold, dashed, dotted, solid, rounded
+         * - color: имя цвета (Red, Blue) или hex (#FF0000)
+         * - fillcolor: цвет заливки
+         * - fontname: Arial, Helvetica, Times, Courier
+         * - fontsize: размер шрифта в пунктах
+         * - penwidth: толщина линии (1, 2, 3...)
+         * - arrowhead/arrowtail: normal, vee, dot, none, diamond, box
+         */
+        const StyleName = {
+            /**
+             * Стили для узлов (node) - субъектов и объектов в RDF триплетах
+             *
+             * Каждый стиль содержит:
+             * - types: массив RDF-типов, к которым применяется этот стиль
+             * - dot: строка параметров DOT для визуализации
+             * - label: человекочитаемое название стиля для легенды
+             * - description: описание стиля
+             */
+            nodeStyles: {
+                // ====================================================================
+                // Стиль для типа foaf:Person (люди)
+                // ====================================================================
+                'PersonStyle': {
+                    // Типы RDF-объектов, которые будут отображаться этим стилем
+                    types: ['foaf:Person', 'schema:Person', 'http://xmlns.com/foaf/0.1/Person'],
+                    // Параметры DOT для визуализации:
+                    // - shape="octagon" - восьмиугольник для отличия людей от других объектов
+                    // - height/width="0.75" - фиксированный размер
+                    // - fixedsize="true" - размер не изменяется в зависимости от текста
+                    // - color="#9C27B0" - фиолетовый цвет границы (изменено с красного для отличия от цвета выделения)
+                    // - fillcolor="#F3E5F5" - светло-фиолетовая заливка
+                    // - fontname="Arial" - шрифт Arial
+                    // - fontsize="10" - размер шрифта 10pt
+                    // - style="filled" - заливка включена
+                    dot: 'shape="octagon" height="0.75" width="0.75" fixedsize="true" color="#9C27B0" fillcolor="#F3E5F5" fontname="Arial" fontsize="10" style="filled"',
+                    label: 'Люди (foaf:Person)',
+                    description: 'Объекты типа foaf:Person или schema:Person'
+                },
+
+                // ====================================================================
+                // Стиль для типа foaf:Organization (организации)
+                // ====================================================================
+                'OrganizationStyle': {
+                    types: ['foaf:Organization', 'schema:Organization', 'http://xmlns.com/foaf/0.1/Organization'],
+                    // - shape="box" - прямоугольник для организаций
+                    // - color="Blue" - синий цвет границы
+                    // - fillcolor="#E6F3FF" - светло-голубая заливка
+                    // - style="filled,bold" - заливка и жирная граница
+                    dot: 'shape="box" height="0.6" width="1.2" color="Blue" fillcolor="#E6F3FF" fontname="Arial" fontsize="10" style="filled,bold"',
+                    label: 'Организации (foaf:Organization)',
+                    description: 'Объекты типа foaf:Organization или schema:Organization'
+                },
+
+                // ====================================================================
+                // Стиль для типа foaf:Document (документы)
+                // ====================================================================
+                'DocumentStyle': {
+                    types: ['foaf:Document', 'schema:Document', 'http://xmlns.com/foaf/0.1/Document'],
+                    // - shape="note" - форма заметки/документа
+                    // - color="Green" - зеленый цвет границы
+                    // - fillcolor="#E8F5E9" - светло-зеленая заливка
+                    dot: 'shape="note" height="0.6" width="1.0" color="Green" fillcolor="#E8F5E9" fontname="Arial" fontsize="10" style="filled"',
+                    label: 'Документы (foaf:Document)',
+                    description: 'Объекты типа foaf:Document'
+                },
+
+                // ====================================================================
+                // Стиль для литералов (строковые значения, числа и т.д.)
+                // ====================================================================
+                'LiteralStyle': {
+                    // Специальный маркер '_Literal' для определения литералов
+                    // (литералы не имеют RDF-типа, определяются по termType)
+                    types: ['_Literal'],
+                    // - shape="box" - прямоугольник
+                    // - color="#666666" - серый цвет границы
+                    // - fillcolor="#FFFFCC" - светло-желтая заливка
+                    // - style="filled,rounded" - заливка и скругленные углы
+                    dot: 'shape="box" color="#666666" fillcolor="#FFFFCC" fontname="Arial" fontsize="9" style="filled,rounded"',
+                    label: 'Литералы (Literal)',
+                    description: 'Строковые значения, числа, даты'
+                },
+
+                // ====================================================================
+                // Стиль для пустых узлов (blank nodes)
+                // ====================================================================
+                'BlankNodeStyle': {
+                    // Специальный маркер '_BlankNode' для определения blank nodes
+                    types: ['_BlankNode'],
+                    // - shape="ellipse" - эллипс
+                    // - color="#999999" - серый цвет границы
+                    // - fillcolor="#E0E0E0" - светло-серая заливка
+                    // - style="filled,dashed" - заливка и пунктирная граница
+                    dot: 'shape="ellipse" color="#999999" fillcolor="#E0E0E0" fontname="Arial" fontsize="9" style="filled,dashed"',
+                    label: 'Пустые узлы (BlankNode)',
+                    description: 'Анонимные узлы без URI'
+                },
+
+                // ====================================================================
+                // Стиль по умолчанию для всех остальных узлов
+                // ====================================================================
+                'default': {
+                    types: [],  // Применяется ко всем узлам, не соответствующим другим стилям
+                    // - shape="ellipse" - эллипс
+                    // - color="#1976D2" - синий цвет границы
+                    // - fillcolor="#CCE5FF" - светло-голубая заливка
+                    dot: 'shape="ellipse" color="#1976D2" fillcolor="#CCE5FF" fontname="Arial" fontsize="10" style="filled"',
+                    label: 'По умолчанию (URI)',
+                    description: 'Все остальные URI-ресурсы'
+                }
+            },
+
+            /**
+             * Стили для ребер (edge) - предикатов в RDF триплетах
+             *
+             * Каждый стиль содержит:
+             * - predicates: массив RDF-предикатов, к которым применяется этот стиль
+             * - dot: строка параметров DOT для визуализации линии
+             * - label: человекочитаемое название стиля для легенды
+             * - description: описание стиля
+             *
+             * ПАРАМЕТРЫ DOT ДЛЯ РЕБЕР:
+             * - color: цвет линии
+             * - penwidth: толщина линии (1=тонкая, 2=средняя, 3=толстая)
+             * - style: стиль линии (solid=сплошная, dashed=пунктир, dotted=точки, bold=жирная)
+             * - arrowhead: стиль стрелки на конце (normal, vee, dot, none, diamond)
+             * - arrowtail: стиль стрелки на начале (для двунаправленных связей)
+             * - dir: направление стрелок (forward, back, both, none)
+             */
+            edgeStyles: {
+                // ====================================================================
+                // Стиль для типизации (rdf:type, a)
+                // ====================================================================
+                'TypeStyle': {
+                    // Предикаты, определяющие тип объекта
+                    predicates: [
+                        'rdf:type',
+                        'a',
+                        'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+                    ],
+                    // - color="#9C27B0" - фиолетовый цвет (типизация)
+                    // - penwidth="2" - средняя толщина
+                    // - style="dashed" - пунктирная линия (для различения от обычных связей)
+                    // - arrowhead="empty" - пустая стрелка
+                    dot: 'color="#9C27B0" penwidth="2" style="dashed" arrowhead="empty"',
+                    label: 'Тип объекта (rdf:type)',
+                    description: 'Связь объекта с его RDF-типом'
+                },
+
+                // ====================================================================
+                // Стиль для связей "знает" (foaf:knows)
+                // ====================================================================
+                'KnowsStyle': {
+                    predicates: [
+                        'foaf:knows',
+                        'http://xmlns.com/foaf/0.1/knows'
+                    ],
+                    // - color="#4CAF50" - зеленый цвет (социальные связи)
+                    // - penwidth="2" - средняя толщина
+                    // - style="solid" - сплошная линия
+                    // - arrowhead="vee" - V-образная стрелка
+                    dot: 'color="#4CAF50" penwidth="2" style="solid" arrowhead="vee"',
+                    label: 'Знает (foaf:knows)',
+                    description: 'Социальная связь между людьми'
+                },
+
+                // ====================================================================
+                // Стиль для членства (foaf:member)
+                // ====================================================================
+                'MemberStyle': {
+                    predicates: [
+                        'foaf:member',
+                        'schema:member',
+                        'http://xmlns.com/foaf/0.1/member'
+                    ],
+                    // - color="#795548" - коричневый цвет (организационные связи, изменено с оранжевого для отличия от цвета выделения)
+                    // - penwidth="2" - средняя толщина
+                    // - style="solid" - сплошная линия
+                    // - arrowhead="diamond" - ромбовидная стрелка
+                    dot: 'color="#795548" penwidth="2" style="solid" arrowhead="diamond"',
+                    label: 'Член (foaf:member)',
+                    description: 'Членство в организации'
+                },
+
+                // ====================================================================
+                // Стиль для атрибутов объекта (foaf:name, foaf:age и др.)
+                // Эти предикаты отображаются одним стилем, как указано в задаче
+                // ====================================================================
+                'AttributeStyle': {
+                    predicates: [
+                        // Атрибуты личности
+                        'foaf:name', 'http://xmlns.com/foaf/0.1/name',
+                        'foaf:age', 'http://xmlns.com/foaf/0.1/age',
+                        'foaf:firstName', 'http://xmlns.com/foaf/0.1/firstName',
+                        'foaf:lastName', 'http://xmlns.com/foaf/0.1/lastName',
+                        'foaf:mbox', 'http://xmlns.com/foaf/0.1/mbox',
+                        'foaf:homepage', 'http://xmlns.com/foaf/0.1/homepage',
+                        'foaf:workplaceHomepage', 'http://xmlns.com/foaf/0.1/workplaceHomepage',
+                        // Schema.org атрибуты
+                        'schema:name', 'schema:age', 'schema:email',
+                        // RDFS атрибуты
+                        'rdfs:label', 'http://www.w3.org/2000/01/rdf-schema#label',
+                        'rdfs:comment', 'http://www.w3.org/2000/01/rdf-schema#comment'
+                    ],
+                    // - color="#2196F3" - синий цвет (атрибуты)
+                    // - penwidth="1" - тонкая линия
+                    // - style="dotted" - точечная линия (для отличия от связей между объектами)
+                    // - arrowhead="normal" - обычная стрелка
+                    dot: 'color="#2196F3" penwidth="1" style="dotted" arrowhead="normal"',
+                    label: 'Атрибуты (name, age...)',
+                    description: 'Свойства объекта: имя, возраст и др.'
+                },
+
+                // ====================================================================
+                // Стиль по умолчанию для всех остальных предикатов
+                // ====================================================================
+                'default': {
+                    predicates: [],  // Применяется ко всем предикатам, не соответствующим другим стилям
+                    // - color="#666666" - серый цвет
+                    // - penwidth="1" - тонкая линия
+                    // - style="solid" - сплошная линия
+                    // - arrowhead="normal" - обычная стрелка
+                    dot: 'color="#666666" penwidth="1" style="solid" arrowhead="normal"',
+                    label: 'По умолчанию',
+                    description: 'Все остальные предикаты'
+                }
+            }
+        };
+
+        /**
+         * AggregationNodeStyles - Стили узлов для режима агрегации
+         *
+         * В режиме агрегации все узлы отображаются как эллипсы.
+         * Тип объекта определяется цветом заливки и толщиной/цветом контура.
+         * Используются единые edgeStyles из StyleName.
+         *
+         * ВАЖНО: Эти стили используются только в режиме агрегации.
+         * Форма всегда ellipse, без таблиц внутри, только текст строками.
+         */
+        const AggregationNodeStyles = {
+            // ====================================================================
+            // Стиль для типа foaf:Person (люди) - эллипс с фиолетовым контуром
+            // ====================================================================
+            'PersonStyle': {
+                types: ['foaf:Person', 'schema:Person', 'http://xmlns.com/foaf/0.1/Person'],
+                // shape="ellipse" - всегда эллипс в режиме агрегации
+                // color="#9C27B0" - фиолетовый цвет контура (изменено с красного для отличия от цвета выделения)
+                // penwidth="2" - толстый контур для выделения типа
+                // fillcolor="#F3E5F5" - светло-фиолетовая заливка
+                dot: 'shape="ellipse" color="#9C27B0" penwidth="2" fillcolor="#F3E5F5" fontname="Arial" fontsize="10" style="filled"',
+                label: 'Люди (foaf:Person)',
+                description: 'Объекты типа foaf:Person (режим агрегации)'
+            },
+
+            // ====================================================================
+            // Стиль для типа foaf:Organization (организации) - эллипс с синим контуром
+            // ====================================================================
+            'OrganizationStyle': {
+                types: ['foaf:Organization', 'schema:Organization', 'http://xmlns.com/foaf/0.1/Organization'],
+                // shape="ellipse" - всегда эллипс
+                // color="Blue" - синий цвет контура
+                // penwidth="3" - более толстый контур
+                // fillcolor="#E3F2FD" - светло-голубая заливка
+                dot: 'shape="ellipse" color="Blue" penwidth="3" fillcolor="#E3F2FD" fontname="Arial" fontsize="10" style="filled"',
+                label: 'Организации (foaf:Organization)',
+                description: 'Объекты типа foaf:Organization (режим агрегации)'
+            },
+
+            // ====================================================================
+            // Стиль для типа foaf:Document (документы) - эллипс с зеленым контуром
+            // ====================================================================
+            'DocumentStyle': {
+                types: ['foaf:Document', 'schema:Document', 'http://xmlns.com/foaf/0.1/Document'],
+                // shape="ellipse" - всегда эллипс
+                // color="Green" - зеленый цвет контура
+                // penwidth="2" - толстый контур
+                // fillcolor="#E8F5E9" - светло-зеленая заливка
+                dot: 'shape="ellipse" color="Green" penwidth="2" fillcolor="#E8F5E9" fontname="Arial" fontsize="10" style="filled"',
+                label: 'Документы (foaf:Document)',
+                description: 'Объекты типа foaf:Document (режим агрегации)'
+            },
+
+            // ====================================================================
+            // Стиль для пустых узлов (blank nodes) - эллипс с серым контуром
+            // ====================================================================
+            'BlankNodeStyle': {
+                types: ['_BlankNode'],
+                // shape="ellipse" - эллипс
+                // color="#999999" - серый цвет контура
+                // style="filled,dashed" - пунктирная граница
+                // fillcolor="#E0E0E0" - светло-серая заливка
+                dot: 'shape="ellipse" color="#999999" penwidth="1" fillcolor="#E0E0E0" fontname="Arial" fontsize="9" style="filled,dashed"',
+                label: 'Пустые узлы (BlankNode)',
+                description: 'Анонимные узлы без URI (режим агрегации)'
+            },
+
+            // ====================================================================
+            // Стиль по умолчанию для всех остальных узлов - эллипс
+            // ====================================================================
+            'default': {
+                types: [],
+                // shape="ellipse" - всегда эллипс
+                // color="#1976D2" - синий цвет контура
+                // penwidth="1" - обычный контур
+                // fillcolor="#CCE5FF" - светло-голубая заливка
+                dot: 'shape="ellipse" color="#1976D2" penwidth="1" fillcolor="#CCE5FF" fontname="Arial" fontsize="10" style="filled"',
+                label: 'По умолчанию (URI)',
+                description: 'Все остальные URI-ресурсы (режим агрегации)'
+            }
+        };
+
+        // ============================================================================
+        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+        // ============================================================================
+
+        // Глобальная переменная для хранения текущего SVG
+        let currentSvgElement = null;
+
+        // Глобальная переменная для хранения текущего масштаба
+        let currentScale = 1.0;
+
+        // Глобальная переменная для хранения префиксов
+        let currentPrefixes = {};
+
+        // Кэш типов для узлов (node URI -> array of types)
+        let nodeTypesCache = {};
+
+        // Глобальная переменная для хранения всех RDF триплетов
+        let currentQuads = [];
+
+        // Маппинг label узла -> URI узла (для обратного поиска при клике)
+        let nodeLabelToUri = {};
+
+        // Текущий выбранный узел
+        let selectedNodeElement = null;
+
+        // Счетчик для уникальных ID панелей свойств
+        let propertiesPanelCounter = 0;
+
+        // Массив открытых панелей свойств
+        let openPropertiesPanels = [];
+
+        // Текущий режим визуализации ('base' или 'notation')
+        let currentMode = Mode;
+
+        // Переменные для перетаскивания панели
+        let draggedPanel = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        // N3 Store для SPARQL запросов
+        let currentStore = null;
+
+        // Comunica SPARQL движок
+        let comunicaEngine = null;
+
+        // Стандартный SPARQL запрос по умолчанию
+        const defaultSparqlQuery = `SELECT ?s ?p ?o
+WHERE {
+    ?s ?p ?o .
+}`;
+
+        // Текущие активные фильтры (предикаты, которые скрыты)
+        // Инициализируется из конфигурации фильтров для текущего режима
+        let activeFilters = [...getFilterConfig(Mode).hiddenPredicates];
+
+        // Все уникальные предикаты в текущих данных (для отображения фильтров)
+        let allPredicates = [];
+
+        // ============================================================================
+        // ФУНКЦИИ РАБОТЫ СО СТИЛЯМИ
+        // ============================================================================
+
+        /**
+         * Базовые стили для режима 'base' (как в ver1)
+         * Все узлы отображаются одинаково без специальных цветов и форм
+         */
+        const BaseStyles = {
+            // Стиль для литералов в базовом режиме
+            literal: 'shape="box" style="filled" fillcolor="#ffffcc"',
+            // Стиль для пустых узлов в базовом режиме
+            blankNode: 'shape="ellipse" style="filled" fillcolor="#e0e0e0"',
+            // Стиль по умолчанию для URI в базовом режиме
+            uri: 'shape="ellipse" style="filled" fillcolor="#cce5ff"',
+            // Стиль для ребер в базовом режиме
+            edge: ''
+        };
+
+        /**
+         * Получает стиль DOT для узла на основе его типов
+         *
+         * Алгоритм:
+         * 1. Если режим 'base', возвращает базовые стили (как в ver1)
+         * 2. Если узел - литерал, возвращает LiteralStyle
+         * 3. Если узел - blank node, возвращает BlankNodeStyle
+         * 4. Ищет совпадение типов узла со стилями в StyleName.nodeStyles
+         * 5. Если совпадение не найдено, возвращает стиль по умолчанию
+         *
+         * @param {string} nodeUri - URI узла
+         * @param {boolean} isLiteral - флаг литерала
+         * @param {boolean} isBlankNode - флаг blank node
+         * @returns {string} - строка параметров DOT для узла
+         */
+        function getNodeStyle(nodeUri, isLiteral, isBlankNode) {
+            // В базовом режиме используем простые стили (как в ver1)
+            if (currentMode === 'base') {
+                if (isLiteral) {
+                    return BaseStyles.literal;
+                }
+                if (isBlankNode) {
+                    return BaseStyles.blankNode;
+                }
+                return BaseStyles.uri;
+            }
+
+            // В режиме агрегации используем AggregationNodeStyles
+            // (форма всегда ellipse, тип определяется цветом заливки и контура)
+            if (currentMode === 'aggregation') {
+                // Специальная обработка blank nodes в режиме агрегации
+                if (isBlankNode) {
+                    return AggregationNodeStyles['BlankNodeStyle'].dot;
+                }
+
+                // Получаем типы узла из кэша
+                const nodeTypes = nodeTypesCache[nodeUri] || [];
+
+                // Ищем совпадение с определенными стилями агрегации
+                for (const [styleName, styleConfig] of Object.entries(AggregationNodeStyles)) {
+                    if (styleName === 'default') continue;  // Пропускаем стиль по умолчанию
+
+                    // Проверяем, есть ли совпадение типов
+                    for (const type of styleConfig.types) {
+                        if (type.startsWith('_')) continue;  // Пропускаем специальные маркеры
+
+                        // Проверяем совпадение типа
+                        if (nodeTypes.includes(type)) {
+                            return styleConfig.dot;
+                        }
+                    }
+                }
+
+                // Возвращаем стиль по умолчанию для режима агрегации
+                return AggregationNodeStyles['default'].dot;
+            }
+
+            // В режиме нотации используем полные стили
+
+            // Специальная обработка литералов
+            if (isLiteral) {
+                return StyleName.nodeStyles['LiteralStyle'].dot;
+            }
+
+            // Специальная обработка blank nodes
+            if (isBlankNode) {
+                return StyleName.nodeStyles['BlankNodeStyle'].dot;
+            }
+
+            // Получаем типы узла из кэша
+            const nodeTypes = nodeTypesCache[nodeUri] || [];
+
+            // Ищем совпадение с определенными стилями
+            for (const [styleName, styleConfig] of Object.entries(StyleName.nodeStyles)) {
+                if (styleName === 'default') continue;  // Пропускаем стиль по умолчанию
+
+                // Проверяем, есть ли совпадение типов
+                for (const type of styleConfig.types) {
+                    if (type.startsWith('_')) continue;  // Пропускаем специальные маркеры
+
+                    // Проверяем совпадение типа
+                    if (nodeTypes.includes(type)) {
+                        return styleConfig.dot;
+                    }
+                }
+            }
+
+            // Возвращаем стиль по умолчанию
+            return StyleName.nodeStyles['default'].dot;
+        }
+
+        /**
+         * Получает стиль DOT для ребра на основе предиката
+         *
+         * Алгоритм:
+         * 1. Если режим 'base', возвращает пустой стиль (как в ver1)
+         * 2. Ищет совпадение предиката со стилями в StyleName.edgeStyles
+         * 3. Если совпадение не найдено, возвращает стиль по умолчанию
+         *
+         * @param {string} predicateUri - URI предиката
+         * @param {string} predicateLabel - prefixed name предиката
+         * @returns {string} - строка параметров DOT для ребра
+         */
+        function getEdgeStyle(predicateUri, predicateLabel) {
+            // В базовом режиме ребра не имеют специальных стилей
+            if (currentMode === 'base') {
+                return BaseStyles.edge;
+            }
+
+            // В режиме нотации используем полные стили
+
+            // Ищем совпадение с определенными стилями
+            for (const [styleName, styleConfig] of Object.entries(StyleName.edgeStyles)) {
+                if (styleName === 'default') continue;  // Пропускаем стиль по умолчанию
+
+                // Проверяем, есть ли совпадение предикатов
+                for (const predicate of styleConfig.predicates) {
+                    if (predicateUri === predicate || predicateLabel === predicate) {
+                        return styleConfig.dot;
+                    }
+                }
+            }
+
+            // Возвращаем стиль по умолчанию
+            return StyleName.edgeStyles['default'].dot;
+        }
+
+        /**
+         * Строит кэш типов для всех узлов из RDF триплетов
+         *
+         * Сканирует все триплеты с предикатом rdf:type (или 'a')
+         * и сохраняет типы для каждого субъекта
+         *
+         * @param {Array} quads - массив RDF триплетов
+         * @param {Object} prefixes - объект с префиксами
+         */
+        function buildNodeTypesCache(quads, prefixes) {
+            nodeTypesCache = {};
+
+            const typePredicates = [
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                'rdf:type',
+                'a'
+            ];
+
+            quads.forEach(quad => {
+                const predicateValue = quad.predicate.value;
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
+
+                // Проверяем, является ли предикат типизацией
+                if (typePredicates.includes(predicateValue) ||
+                    typePredicates.includes(predicateLabel) ||
+                    predicateLabel === 'a') {
+
+                    const subjectUri = quad.subject.value;
+                    const typeUri = quad.object.value;
+                    const typeLabel = getPrefixedName(typeUri, prefixes);
+
+                    // Инициализируем массив типов, если нужно
+                    if (!nodeTypesCache[subjectUri]) {
+                        nodeTypesCache[subjectUri] = [];
+                    }
+
+                    // Добавляем тип (и URI, и prefixed name)
+                    if (!nodeTypesCache[subjectUri].includes(typeUri)) {
+                        nodeTypesCache[subjectUri].push(typeUri);
+                    }
+                    if (!nodeTypesCache[subjectUri].includes(typeLabel)) {
+                        nodeTypesCache[subjectUri].push(typeLabel);
+                    }
+                }
+            });
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ МАСШТАБИРОВАНИЯ
+        // ============================================================================
+
+        /**
+         * Применяет текущий масштаб к контейнеру с графом
+         */
+        function applyZoom() {
+            const zoomContent = document.getElementById('zoom-content');
+            const zoomLevel = document.getElementById('zoom-level');
+
+            if (zoomContent) {
+                zoomContent.style.transform = `scale(${currentScale})`;
+            }
+            if (zoomLevel) {
+                zoomLevel.textContent = Math.round(currentScale * 100) + '%';
+            }
+        }
+
+        /**
+         * Увеличивает масштаб на 10%
+         */
+        function zoomIn() {
+            if (currentScale < 3.0) {
+                currentScale += 0.1;
+                applyZoom();
+            }
+        }
+
+        /**
+         * Уменьшает масштаб на 10%
+         */
+        function zoomOut() {
+            if (currentScale > 0.1) {
+                currentScale -= 0.1;
+                applyZoom();
+            }
+        }
+
+        /**
+         * Сбрасывает масштаб к 100%
+         */
+        function zoomReset() {
+            currentScale = 1.0;
+            applyZoom();
+        }
+
+        /**
+         * Вписывает граф в видимую область контейнера
+         */
+        function zoomFit() {
+            const zoomContainer = document.getElementById('zoom-container');
+            const output = document.getElementById('output');
+            const svg = output ? output.querySelector('svg') : null;
+
+            if (!zoomContainer || !svg) {
+                return;
+            }
+
+            // Получаем размеры контейнера
+            const containerWidth = zoomContainer.clientWidth - 20; // с учетом padding
+            const containerHeight = zoomContainer.clientHeight - 20;
+
+            // Получаем размеры SVG
+            let svgWidth = parseFloat(svg.getAttribute('width')) || svg.getBoundingClientRect().width;
+            let svgHeight = parseFloat(svg.getAttribute('height')) || svg.getBoundingClientRect().height;
+
+            // Если размеры в pt, конвертируем
+            const widthStr = svg.getAttribute('width') || '';
+            const heightStr = svg.getAttribute('height') || '';
+            if (widthStr.includes('pt')) {
+                svgWidth = parseFloat(widthStr) * 1.33;
+            }
+            if (heightStr.includes('pt')) {
+                svgHeight = parseFloat(heightStr) * 1.33;
+            }
+
+            // Вычисляем масштаб для вписывания
+            const scaleX = containerWidth / svgWidth;
+            const scaleY = containerHeight / svgHeight;
+            currentScale = Math.min(scaleX, scaleY, 1.0); // не более 100%
+
+            applyZoom();
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ПАНЕЛИ СВОЙСТВ УЗЛА (поддержка множественных панелей)
+        // ============================================================================
+
+        /**
+         * Закрывает конкретную панель свойств по её ID
+         *
+         * @param {string} panelId - ID панели для закрытия
+         */
+        function closePropertiesPanel(panelId) {
+            const panel = document.getElementById(panelId);
+            if (panel) {
+                panel.remove();
+                // Удаляем из массива открытых панелей
+                openPropertiesPanels = openPropertiesPanels.filter(p => p.id !== panelId);
+            }
+
+            // Снимаем выделение с выбранного узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+        }
+
+        /**
+         * Закрывает все панели свойств
+         */
+        function closeAllPropertiesPanels() {
+            const container = document.getElementById('properties-panels-container');
+            if (container) {
+                container.innerHTML = '';
+            }
+            openPropertiesPanels = [];
+
+            // Снимаем выделение с выбранного узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+        }
+
+        /**
+         * Получает все свойства узла по его URI
+         * Свойством считается триплет, где данный узел является субъектом
+         *
+         * @param {string} nodeUri - URI узла
+         * @returns {Array} - Массив объектов {predicate, predicateLabel, object, objectLabel, isLiteral}
+         */
+        function getNodeProperties(nodeUri) {
+            const properties = [];
+
+            currentQuads.forEach(quad => {
+                // Ищем триплеты, где наш узел является субъектом
+                if (quad.subject.value === nodeUri) {
+                    const predicateLabel = getPrefixedName(quad.predicate.value, currentPrefixes);
+                    const isLiteral = quad.object.termType === 'Literal';
+                    const objectLabel = isLiteral
+                        ? `"${quad.object.value}"`
+                        : getPrefixedName(quad.object.value, currentPrefixes);
+
+                    properties.push({
+                        predicate: quad.predicate.value,
+                        predicateLabel: predicateLabel,
+                        object: quad.object.value,
+                        objectLabel: objectLabel,
+                        isLiteral: isLiteral
+                    });
+                }
+            });
+
+            return properties;
+        }
+
+        /**
+         * Создает и отображает новую панель свойств узла
+         *
+         * @param {string} nodeUri - URI узла
+         * @param {string} nodeLabel - Отображаемое имя узла (prefixed name)
+         */
+        function showNodeProperties(nodeUri, nodeLabel) {
+            const container = document.getElementById('properties-panels-container');
+            if (!container) return;
+
+            // Проверяем, не открыта ли уже панель для этого узла
+            const existingPanel = openPropertiesPanels.find(p => p.uri === nodeUri);
+            if (existingPanel) {
+                // Панель уже открыта, выводим её на передний план
+                const panel = document.getElementById(existingPanel.id);
+                if (panel) {
+                    bringPanelToFront(panel);
+                }
+                return;
+            }
+
+            // Создаем новый уникальный ID для панели
+            propertiesPanelCounter++;
+            const panelId = 'properties-panel-' + propertiesPanelCounter;
+
+            // Вычисляем позицию для новой панели (смещение от предыдущих)
+            const offsetMultiplier = openPropertiesPanels.length % 5;
+            const rightOffset = 20 + (offsetMultiplier * 30);
+            const topOffset = 100 + (offsetMultiplier * 30);
+
+            // Получаем свойства узла
+            const properties = getNodeProperties(nodeUri);
+
+            // Формируем HTML для свойств
+            let propertiesHtml = '';
+
+            if (properties.length === 0) {
+                propertiesHtml = '<div class="properties-empty">У этого узла нет свойств (он не является субъектом ни одного триплета)</div>';
+            } else {
+                properties.forEach(prop => {
+                    propertiesHtml += '<div class="property-item">';
+                    propertiesHtml += `<div class="property-predicate">${prop.predicateLabel}</div>`;
+                    propertiesHtml += `<div class="property-value ${prop.isLiteral ? 'literal' : 'uri'}">${prop.objectLabel}</div>`;
+                    propertiesHtml += '</div>';
+                });
+            }
+
+            // Добавляем информацию о типах узла
+            const nodeTypes = nodeTypesCache[nodeUri] || [];
+            if (nodeTypes.length > 0) {
+                // Фильтруем только prefixed names (не полные URI)
+                const prefixedTypes = nodeTypes.filter(t => t.includes(':') && !t.startsWith('http'));
+                if (prefixedTypes.length > 0) {
+                    propertiesHtml += '<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">';
+                    propertiesHtml += '<div style="font-size: 12px; color: #666; margin-bottom: 5px;">Тип узла:</div>';
+                    prefixedTypes.forEach(type => {
+                        propertiesHtml += `<span class="properties-type-badge">${type}</span> `;
+                    });
+                    propertiesHtml += '</div>';
+                }
+            }
+
+            // Создаем HTML панели
+            const panelHtml = `
+                <div class="properties-panel visible" id="${panelId}" style="right: ${rightOffset}px; top: ${topOffset}px;">
+                    <div class="properties-header" onmousedown="startDragPanel(event, '${panelId}')">
+                        <h3>${nodeLabel}</h3>
+                        <button class="properties-close-btn" onclick="closePropertiesPanel('${panelId}')">&times;</button>
+                    </div>
+                    <div class="properties-content">
+                        ${propertiesHtml}
+                    </div>
+                </div>
+            `;
+
+            // Добавляем панель в контейнер
+            container.insertAdjacentHTML('beforeend', panelHtml);
+
+            // Регистрируем панель в массиве открытых панелей
+            openPropertiesPanels.push({
+                id: panelId,
+                uri: nodeUri,
+                label: nodeLabel
+            });
+
+            // Выводим новую панель на передний план
+            const newPanel = document.getElementById(panelId);
+            if (newPanel) {
+                bringPanelToFront(newPanel);
+            }
+        }
+
+        /**
+         * Выводит панель на передний план (увеличивает z-index)
+         *
+         * @param {HTMLElement} panel - Элемент панели
+         */
+        function bringPanelToFront(panel) {
+            // Находим максимальный z-index среди всех панелей
+            let maxZIndex = 1000;
+            openPropertiesPanels.forEach(p => {
+                const el = document.getElementById(p.id);
+                if (el) {
+                    const z = parseInt(el.style.zIndex) || 1000;
+                    if (z > maxZIndex) maxZIndex = z;
+                }
+            });
+
+            // Устанавливаем z-index выше максимального
+            panel.style.zIndex = maxZIndex + 1;
+        }
+
+        /**
+         * Начинает перетаскивание панели
+         *
+         * @param {MouseEvent} event - Событие мыши
+         * @param {string} panelId - ID перетаскиваемой панели
+         */
+        function startDragPanel(event, panelId) {
+            // Не перетаскиваем при клике на кнопку закрытия
+            if (event.target.classList.contains('properties-close-btn')) {
+                return;
+            }
+
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+
+            draggedPanel = panel;
+
+            // Вычисляем смещение курсора относительно панели
+            const rect = panel.getBoundingClientRect();
+            dragOffsetX = event.clientX - rect.left;
+            dragOffsetY = event.clientY - rect.top;
+
+            // Выводим панель на передний план
+            bringPanelToFront(panel);
+
+            // Добавляем обработчики для перетаскивания
+            document.addEventListener('mousemove', dragPanel);
+            document.addEventListener('mouseup', stopDragPanel);
+
+            // Предотвращаем выделение текста при перетаскивании
+            event.preventDefault();
+        }
+
+        /**
+         * Обработчик перетаскивания панели
+         *
+         * @param {MouseEvent} event - Событие мыши
+         */
+        function dragPanel(event) {
+            if (!draggedPanel) return;
+
+            // Вычисляем новую позицию
+            let newLeft = event.clientX - dragOffsetX;
+            let newTop = event.clientY - dragOffsetY;
+
+            // Ограничиваем позицию в пределах окна
+            const panelRect = draggedPanel.getBoundingClientRect();
+            const maxLeft = window.innerWidth - panelRect.width;
+            const maxTop = window.innerHeight - panelRect.height;
+
+            newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+            newTop = Math.max(0, Math.min(newTop, maxTop));
+
+            // Применяем позицию (используем left и top, убираем right)
+            draggedPanel.style.left = newLeft + 'px';
+            draggedPanel.style.top = newTop + 'px';
+            draggedPanel.style.right = 'auto';
+        }
+
+        /**
+         * Завершает перетаскивание панели
+         */
+        function stopDragPanel() {
+            draggedPanel = null;
+            document.removeEventListener('mousemove', dragPanel);
+            document.removeEventListener('mouseup', stopDragPanel);
+        }
+
+        /**
+         * Обработчик клика на узел SVG графа
+         *
+         * @param {Event} event - Событие клика
+         */
+        function handleNodeClick(event) {
+            // Получаем элемент узла (ищем родительский элемент с классом 'node')
+            let nodeElement = event.target;
+            while (nodeElement && !nodeElement.classList.contains('node')) {
+                nodeElement = nodeElement.parentElement;
+            }
+
+            if (!nodeElement) return;
+
+            // Снимаем выделение с предыдущего узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+            }
+
+            // Выделяем новый узел
+            nodeElement.classList.add('selected');
+            selectedNodeElement = nodeElement;
+
+            // Получаем label узла из title элемента
+            const titleElement = nodeElement.querySelector('title');
+            if (!titleElement) return;
+
+            const nodeId = titleElement.textContent;
+
+            // Ищем URI узла по его ID (DOT node ID)
+            // Узлы в nodeLabelToUri хранятся как label -> {uri, dotId}
+            let nodeUri = null;
+            let nodeLabel = nodeId;
+
+            for (const [label, info] of Object.entries(nodeLabelToUri)) {
+                if (info.dotId === nodeId) {
+                    nodeUri = info.uri;
+                    nodeLabel = label;
+                    break;
+                }
+            }
+
+            // Если не нашли по dotId, пробуем искать по label напрямую
+            if (!nodeUri && nodeLabelToUri[nodeId]) {
+                nodeUri = nodeLabelToUri[nodeId].uri;
+                nodeLabel = nodeId;
+            }
+
+            // Если все еще не нашли, пробуем использовать label как есть
+            if (!nodeUri) {
+                // Пробуем найти URI в обратном маппинге
+                for (const [label, info] of Object.entries(nodeLabelToUri)) {
+                    if (label === nodeId || info.uri === nodeId) {
+                        nodeUri = info.uri;
+                        nodeLabel = label;
+                        break;
+                    }
+                }
+            }
+
+            if (nodeUri) {
+                showNodeProperties(nodeUri, nodeLabel);
+            }
+        }
+
+        /**
+         * Добавляет обработчики кликов на узлы SVG графа
+         */
+        function addNodeClickHandlers() {
+            const output = document.getElementById('output');
+            const svg = output ? output.querySelector('svg') : null;
+
+            if (!svg) return;
+
+            // Находим все узлы (элементы с классом 'node')
+            const nodes = svg.querySelectorAll('.node');
+
+            nodes.forEach(node => {
+                node.style.cursor = 'pointer';
+                node.addEventListener('click', handleNodeClick);
+            });
+        }
+
+        /**
+         * Обновляет описание режима визуализации
+         */
+        function updateModeDescription() {
+            const modeSelect = document.getElementById('visualization-mode');
+            const description = document.getElementById('mode-description');
+
+            if (!modeSelect || !description) return;
+
+            if (modeSelect.value === 'notation') {
+                description.textContent = 'С выделением типов объектов и предикатов цветом и формами';
+            } else if (modeSelect.value === 'aggregation') {
+                description.textContent = 'Литералы агрегируются в общий узел, name/label обычным шрифтом, остальные - мелким';
+            } else {
+                description.textContent = 'Без специальных стилей (как в версии 1)';
+            }
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ SPARQL ЗАПРОСОВ
+        // ============================================================================
+
+        /**
+         * Переключает видимость панели SPARQL
+         */
+        function toggleSparqlPanel() {
+            const sparqlMode = document.getElementById('sparql-mode');
+            const sparqlPanel = document.getElementById('sparql-panel');
+            const sparqlDescription = document.getElementById('sparql-mode-description');
+
+            if (!sparqlMode || !sparqlPanel) return;
+
+            if (sparqlMode.value === 'yes') {
+                sparqlPanel.classList.add('visible');
+                if (sparqlDescription) {
+                    sparqlDescription.textContent = 'SPARQL панель активна';
+                }
+            } else {
+                sparqlPanel.classList.remove('visible');
+                if (sparqlDescription) {
+                    sparqlDescription.textContent = 'Включите для выполнения SPARQL запросов к графу';
+                }
+            }
+        }
+
+        /**
+         * Сбрасывает SPARQL запрос к значению по умолчанию
+         */
+        function resetSparqlQuery() {
+            const sparqlQuery = document.getElementById('sparql-query');
+            if (sparqlQuery) {
+                sparqlQuery.value = defaultSparqlQuery;
+            }
+            // Очищаем результаты
+            const sparqlResults = document.getElementById('sparql-results');
+            if (sparqlResults) {
+                sparqlResults.style.display = 'none';
+            }
+        }
+
+        /**
+         * Создает N3 Store из текущих триплетов
+         */
+        function createN3Store() {
+            if (currentQuads.length === 0) {
+                throw new Error('Сначала визуализируйте RDF данные');
+            }
+
+            // Создаем новый N3 Store
+            currentStore = new N3.Store();
+
+            // Добавляем все триплеты в Store
+            currentQuads.forEach(quad => {
+                currentStore.addQuad(quad);
+            });
+
+            console.log(`Создан N3 Store с ${currentStore.size} триплетами`);
+            return currentStore;
+        }
+
+        /**
+         * Выполняет SPARQL запрос к текущим RDF данным
+         */
+        async function executeSparqlQuery() {
+            const sparqlQueryText = document.getElementById('sparql-query').value.trim();
+            const sparqlResults = document.getElementById('sparql-results');
+            const sparqlResultsContent = document.getElementById('sparql-results-content');
+
+            if (!sparqlQueryText) {
+                showSparqlError('Пожалуйста, введите SPARQL запрос');
+                return;
+            }
+
+            if (currentQuads.length === 0) {
+                showSparqlError('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            // Показываем индикатор загрузки
+            sparqlResults.style.display = 'block';
+            sparqlResultsContent.innerHTML = '<div class="sparql-loading"><div class="spinner"></div><p>Выполнение запроса...</p></div>';
+
+            try {
+                // Создаем N3 Store если еще не создан
+                if (!currentStore || currentStore.size === 0) {
+                    createN3Store();
+                }
+
+                // Проверяем доступность Comunica
+                if (typeof Comunica === 'undefined') {
+                    throw new Error('Comunica SPARQL движок не загружен. Попробуйте обновить страницу.');
+                }
+
+                // Создаем Comunica движок если еще не создан
+                if (!comunicaEngine) {
+                    comunicaEngine = new Comunica.QueryEngine();
+                    console.log('Создан Comunica QueryEngine');
+                }
+
+                console.log('Выполняем SPARQL запрос:', sparqlQueryText);
+
+                // Выполняем запрос
+                const bindingsStream = await comunicaEngine.queryBindings(sparqlQueryText, {
+                    sources: [currentStore]
+                });
+
+                // Собираем все результаты
+                const bindings = await bindingsStream.toArray();
+
+                console.log(`Получено ${bindings.length} результатов`);
+
+                // Отображаем результаты
+                displaySparqlResults(bindings, sparqlQueryText);
+
+            } catch (error) {
+                console.error('Ошибка SPARQL запроса:', error);
+                showSparqlError(error.message);
+            }
+        }
+
+        /**
+         * Отображает результаты SPARQL запроса в виде таблицы
+         *
+         * @param {Array} bindings - Массив результатов запроса
+         * @param {string} queryText - Текст запроса для извлечения переменных
+         */
+        function displaySparqlResults(bindings, queryText) {
+            const sparqlResults = document.getElementById('sparql-results');
+            const sparqlResultsContent = document.getElementById('sparql-results-content');
+
+            if (bindings.length === 0) {
+                sparqlResultsContent.innerHTML = '<p style="color: #666; font-style: italic;">Нет результатов для данного запроса</p>';
+                sparqlResults.style.display = 'block';
+                return;
+            }
+
+            // Извлекаем переменные из первого результата
+            const firstBinding = bindings[0];
+            const variables = [];
+
+            // Собираем имена переменных
+            for (const [key, value] of firstBinding) {
+                variables.push(key.value);
+            }
+
+            // Создаем HTML таблицу
+            let html = '<table class="sparql-results-table">';
+
+            // Заголовок таблицы
+            html += '<thead><tr>';
+            variables.forEach(v => {
+                html += `<th>?${v}</th>`;
+            });
+            html += '</tr></thead>';
+
+            // Тело таблицы
+            html += '<tbody>';
+            bindings.forEach((binding, rowIndex) => {
+                // Собираем URI из всех значений строки для поиска узлов
+                const rowUris = [];
+                variables.forEach(v => {
+                    const term = binding.get(v);
+                    if (term && term.termType !== 'Literal') {
+                        rowUris.push(term.value);
+                    }
+                });
+                // Используем base64 кодирование для безопасной передачи JSON в атрибуте
+                const urisData = btoa(encodeURIComponent(JSON.stringify(rowUris)));
+
+                html += `<tr class="clickable" data-row-index="${rowIndex}" data-uris="${urisData}" onclick="highlightNodeFromSparqlResult(this)">`;
+                variables.forEach(v => {
+                    const term = binding.get(v);
+                    if (term) {
+                        const value = term.value;
+                        const isLiteral = term.termType === 'Literal';
+                        const displayValue = isLiteral ? `"${value}"` : getPrefixedName(value, currentPrefixes);
+                        const cssClass = isLiteral ? 'literal' : 'uri';
+                        html += `<td class="${cssClass}">${escapeHtml(displayValue)}</td>`;
+                    } else {
+                        html += '<td>-</td>';
+                    }
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+
+            // Добавляем информацию о количестве результатов
+            html += `<p style="margin-top: 10px; color: #666; font-size: 12px;">Найдено результатов: ${bindings.length}</p>`;
+
+            sparqlResultsContent.innerHTML = html;
+            sparqlResults.style.display = 'block';
+        }
+
+        /**
+         * Подсвечивает узел на графе при клике на строку в результатах SPARQL
+         *
+         * @param {HTMLElement} rowElement - Элемент строки таблицы
+         */
+        function highlightNodeFromSparqlResult(rowElement) {
+            // Снимаем подсветку со всех строк
+            const allRows = document.querySelectorAll('.sparql-results-table tr.highlighted');
+            allRows.forEach(row => row.classList.remove('highlighted'));
+
+            // Подсвечиваем текущую строку
+            rowElement.classList.add('highlighted');
+
+            // Получаем URI из данных строки (base64 закодированный JSON)
+            const urisData = rowElement.getAttribute('data-uris');
+            if (!urisData) return;
+
+            let uris;
+            try {
+                // Декодируем base64 и затем URL-декодируем
+                uris = JSON.parse(decodeURIComponent(atob(urisData)));
+            } catch (e) {
+                console.error('Ошибка парсинга URI:', e);
+                return;
+            }
+
+            if (uris.length === 0) return;
+
+            // Снимаем выделение с предыдущего узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+
+            // Ищем узлы на графе по URI
+            const output = document.getElementById('output');
+            const svg = output ? output.querySelector('svg') : null;
+            if (!svg) return;
+
+            const nodes = svg.querySelectorAll('.node');
+            let foundNode = null;
+
+            // Пробуем найти узел для первого URI
+            for (const uri of uris) {
+                for (const [label, info] of Object.entries(nodeLabelToUri)) {
+                    if (info.uri === uri) {
+                        // Нашли маппинг, ищем узел по dotId
+                        for (const node of nodes) {
+                            const titleElement = node.querySelector('title');
+                            if (titleElement && titleElement.textContent === info.dotId) {
+                                foundNode = node;
+                                break;
+                            }
+                        }
+                        if (foundNode) break;
+                    }
+                }
+                if (foundNode) break;
+            }
+
+            if (foundNode) {
+                // Выделяем найденный узел
+                foundNode.classList.add('selected');
+                selectedNodeElement = foundNode;
+
+                // Прокручиваем к узлу
+                foundNode.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+        }
+
+        /**
+         * Показывает сообщение об ошибке SPARQL
+         *
+         * @param {string} message - Текст ошибки
+         */
+        function showSparqlError(message) {
+            const sparqlResults = document.getElementById('sparql-results');
+            const sparqlResultsContent = document.getElementById('sparql-results-content');
+
+            sparqlResultsContent.innerHTML = `<div class="sparql-error"><strong>Ошибка:</strong> ${escapeHtml(message)}</div>`;
+            sparqlResults.style.display = 'block';
+        }
+
+        /**
+         * Экранирует HTML символы для безопасного отображения
+         *
+         * @param {string} text - Исходный текст
+         * @returns {string} - Экранированный текст
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ФИЛЬТРАЦИИ
+        // ============================================================================
+
+        /**
+         * Собирает все уникальные предикаты из текущих данных
+         *
+         * @returns {Array} - Массив объектов {uri, label} для каждого уникального предиката
+         */
+        function collectAllPredicates() {
+            const predicatesSet = new Set();
+            const predicatesMap = new Map();
+
+            currentQuads.forEach(quad => {
+                const predicateUri = quad.predicate.value;
+                if (!predicatesSet.has(predicateUri)) {
+                    predicatesSet.add(predicateUri);
+                    const predicateLabel = getPrefixedName(predicateUri, currentPrefixes);
+                    predicatesMap.set(predicateUri, {
+                        uri: predicateUri,
+                        label: predicateLabel
+                    });
+                }
+            });
+
+            // Сортируем по label
+            const predicates = Array.from(predicatesMap.values());
+            predicates.sort((a, b) => a.label.localeCompare(b.label));
+
+            return predicates;
+        }
+
+        /**
+         * Проверяет, скрыт ли предикат по активным фильтрам
+         *
+         * @param {string} predicateUri - URI предиката
+         * @param {string} predicateLabel - Prefixed name предиката
+         * @returns {boolean} - true если предикат скрыт
+         */
+        function isPredicateHidden(predicateUri, predicateLabel) {
+            return activeFilters.includes(predicateUri) || activeFilters.includes(predicateLabel);
+        }
+
+        /**
+         * Отображает панель фильтров с чекбоксами для каждого предиката
+         * Панель доступна для обоих режимов (base и notation),
+         * но с разными настройками по умолчанию
+         */
+        function displayFilters() {
+            const filterPanel = document.getElementById('filter-panel');
+            const filterContent = document.getElementById('filter-content');
+
+            // Собираем все уникальные предикаты
+            allPredicates = collectAllPredicates();
+
+            if (allPredicates.length === 0) {
+                filterPanel.style.display = 'none';
+                return;
+            }
+
+            // Формируем HTML для чекбоксов
+            let html = '';
+            allPredicates.forEach((predicate, index) => {
+                const isChecked = !isPredicateHidden(predicate.uri, predicate.label);
+                const checkboxId = 'filter-checkbox-' + index;
+
+                html += `<div class="filter-item">`;
+                html += `<input type="checkbox" id="${checkboxId}" ${isChecked ? 'checked' : ''} `;
+                html += `onchange="toggleFilter('${escapeHtml(predicate.uri)}', '${escapeHtml(predicate.label)}', this.checked)">`;
+                html += `<label for="${checkboxId}">${escapeHtml(predicate.label)}</label>`;
+                html += `</div>`;
+            });
+
+            filterContent.innerHTML = html;
+            filterPanel.style.display = 'block';
+        }
+
+        /**
+         * Переключает состояние фильтра для предиката
+         *
+         * @param {string} predicateUri - URI предиката
+         * @param {string} predicateLabel - Prefixed name предиката
+         * @param {boolean} isVisible - true если предикат должен быть видимым
+         */
+        function toggleFilter(predicateUri, predicateLabel, isVisible) {
+            if (isVisible) {
+                // Убираем из фильтров (делаем видимым)
+                activeFilters = activeFilters.filter(f => f !== predicateUri && f !== predicateLabel);
+            } else {
+                // Добавляем в фильтры (скрываем)
+                if (!activeFilters.includes(predicateUri)) {
+                    activeFilters.push(predicateUri);
+                }
+                if (!activeFilters.includes(predicateLabel)) {
+                    activeFilters.push(predicateLabel);
+                }
+            }
+
+            // Перевизуализируем граф
+            reVisualizeWithFilters();
+        }
+
+        /**
+         * Выделяет все предикаты (делает видимыми)
+         */
+        function selectAllFilters() {
+            activeFilters = [];
+
+            // Обновляем чекбоксы
+            const checkboxes = document.querySelectorAll('#filter-content input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = true);
+
+            // Перевизуализируем граф
+            reVisualizeWithFilters();
+        }
+
+        /**
+         * Снимает выделение со всех предикатов (скрывает все)
+         */
+        function deselectAllFilters() {
+            // Скрываем все предикаты
+            activeFilters = [];
+            allPredicates.forEach(predicate => {
+                activeFilters.push(predicate.uri);
+                activeFilters.push(predicate.label);
+            });
+
+            // Обновляем чекбоксы
+            const checkboxes = document.querySelectorAll('#filter-content input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = false);
+
+            // Перевизуализируем граф
+            reVisualizeWithFilters();
+        }
+
+        /**
+         * Перевизуализирует граф с учетом текущих фильтров
+         * Не пересобирает данные, только перестраивает DOT-код и рендерит
+         */
+        async function reVisualizeWithFilters() {
+            if (currentQuads.length === 0) {
+                return;
+            }
+
+            try {
+                // Фильтруем триплеты для визуализации (но сохраняем оригинальные currentQuads)
+                const filteredQuads = currentQuads.filter(quad => {
+                    const predicateUri = quad.predicate.value;
+                    const predicateLabel = getPrefixedName(predicateUri, currentPrefixes);
+                    return !isPredicateHidden(predicateUri, predicateLabel);
+                });
+
+                // Генерируем DOT-код из отфильтрованных триплетов
+                const dotCode = rdfToDot(filteredQuads, currentPrefixes);
+
+                // Получаем движок компоновки
+                const layoutEngine = document.getElementById('layout-engine').value;
+
+                // Рендерим граф с помощью Viz.js
+                const viz = await Viz.instance();
+                const svgString = viz.renderString(dotCode, {
+                    format: 'svg',
+                    engine: layoutEngine
+                });
+
+                // Отображаем результат
+                const output = document.getElementById('output');
+                output.innerHTML = svgString;
+                currentSvgElement = output.querySelector('svg');
+
+                // Добавляем обработчики кликов на узлы графа
+                addNodeClickHandlers();
+
+            } catch (error) {
+                console.error('Ошибка при перевизуализации:', error);
+            }
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ЗАГРУЗКИ ПРИМЕРОВ
+        // ============================================================================
+
+        /**
+         * Загружает пример RDF данных в формате Turtle
+         */
+        function loadExampleTurtle() {
+            const exampleRdf = `# Пример RDF данных в формате Turtle
+# Определение префиксов (сокращений для URI)
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Описание человека John
+ex:john rdf:type foaf:Person ;
+    foaf:name "John Doe" ;
+    foaf:age 30 ;
+    foaf:knows ex:jane, ex:bob .
+
+# Описание человека Jane
+ex:jane rdf:type foaf:Person ;
+    foaf:name "Jane Smith" ;
+    foaf:knows ex:john .
+
+# Описание человека Bob
+ex:bob rdf:type foaf:Person ;
+    foaf:name "Bob Wilson" ;
+    foaf:workplaceHomepage <http://example.org/company> .
+
+# Описание компании
+ex:company rdf:type foaf:Organization ;
+    foaf:name "Example Corp" ;
+    foaf:member ex:bob, ex:jane .`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'turtle';
+        }
+
+        /**
+         * Загружает пример RDF данных в формате N-Triples
+         */
+        function loadExampleNTriples() {
+            const exampleRdf = `# Пример RDF данных в формате N-Triples
+# Каждая строка содержит один триплет: субъект предикат объект .
+<http://example.org/john> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/name> "John Doe" .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/age> "30"^^<http://www.w3.org/2001/XMLSchema#integer> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/knows> <http://example.org/jane> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/knows> <http://example.org/bob> .
+<http://example.org/jane> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .
+<http://example.org/jane> <http://xmlns.com/foaf/0.1/name> "Jane Smith" .
+<http://example.org/jane> <http://xmlns.com/foaf/0.1/knows> <http://example.org/john> .
+<http://example.org/bob> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .
+<http://example.org/bob> <http://xmlns.com/foaf/0.1/name> "Bob Wilson" .
+<http://example.org/bob> <http://xmlns.com/foaf/0.1/workplaceHomepage> <http://example.org/company> .
+<http://example.org/company> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Organization> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/name> "Example Corp" .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/member> <http://example.org/bob> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/member> <http://example.org/jane> .`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'n-triples';
+        }
+
+        /**
+         * Загружает пример RDF данных в формате N-Quads
+         */
+        function loadExampleNQuads() {
+            const exampleRdf = `# Пример RDF данных в формате N-Quads
+# Формат: субъект предикат объект граф .
+# N-Quads расширяет N-Triples добавлением именованных графов
+<http://example.org/john> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> <http://example.org/people> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/name> "John Doe" <http://example.org/people> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/knows> <http://example.org/jane> <http://example.org/people> .
+<http://example.org/jane> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> <http://example.org/people> .
+<http://example.org/jane> <http://xmlns.com/foaf/0.1/name> "Jane Smith" <http://example.org/people> .
+<http://example.org/company> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Organization> <http://example.org/organizations> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/name> "Example Corp" <http://example.org/organizations> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/member> <http://example.org/john> <http://example.org/organizations> .`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'n-quads';
+        }
+
+        /**
+         * Загружает пример RDF данных в формате TriG
+         */
+        function loadExampleTriG() {
+            const exampleRdf = `# Пример RDF данных в формате TriG
+# TriG расширяет Turtle добавлением именованных графов
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# Граф с информацией о людях
+ex:people {
+    ex:john rdf:type foaf:Person ;
+        foaf:name "John Doe" ;
+        foaf:knows ex:jane .
+
+    ex:jane rdf:type foaf:Person ;
+        foaf:name "Jane Smith" ;
+        foaf:knows ex:john .
+}
+
+# Граф с информацией об организациях
+ex:organizations {
+    ex:company rdf:type foaf:Organization ;
+        foaf:name "Example Corp" ;
+        foaf:member ex:john, ex:jane .
+}`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'trig';
+        }
+
+        /**
+         * Для обратной совместимости: вызывает загрузку примера Turtle
+         */
+        function loadExample() {
+            loadExampleTurtle();
+        }
+
+        // ============================================================================
+        // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С URI
+        // ============================================================================
+
+        /**
+         * Извлекает локальное имя из URI
+         * Например: http://xmlns.com/foaf/0.1/Person -> Person
+         *
+         * @param {string} uri - Полный URI
+         * @returns {string} - Локальное имя или сокращенный URI
+         */
+        function getLocalName(uri) {
+            // Если это не строка, возвращаем как есть
+            if (typeof uri !== 'string') {
+                return String(uri);
+            }
+
+            // Попытка извлечь локальное имя после # или последнего /
+            const hashIndex = uri.lastIndexOf('#');
+            const slashIndex = uri.lastIndexOf('/');
+
+            // Выбираем индекс, который дает более короткое имя
+            const splitIndex = Math.max(hashIndex, slashIndex);
+
+            if (splitIndex !== -1 && splitIndex < uri.length - 1) {
+                return uri.substring(splitIndex + 1);
+            }
+
+            // Если не удалось извлечь, возвращаем весь URI
+            return uri;
+        }
+
+        /**
+         * Получает имя с префиксом из URI, используя известные префиксы
+         * Например: http://xmlns.com/foaf/0.1/Person -> foaf:Person
+         *
+         * @param {string} uri - Полный URI
+         * @param {Object} prefixes - Объект с префиксами (prefix -> namespace)
+         * @returns {string} - Имя с префиксом или локальное имя
+         */
+        function getPrefixedName(uri, prefixes) {
+            // Если это не строка, возвращаем как есть
+            if (typeof uri !== 'string') {
+                return String(uri);
+            }
+
+            // Ищем подходящий префикс
+            for (const [prefix, namespace] of Object.entries(prefixes)) {
+                if (uri.startsWith(namespace)) {
+                    const localName = uri.substring(namespace.length);
+                    // Возвращаем prefixed name (например, foaf:Person)
+                    return prefix + ':' + localName;
+                }
+            }
+
+            // Если префикс не найден, возвращаем локальное имя
+            return getLocalName(uri);
+        }
+
+        /**
+         * Экранирует специальные символы для использования в DOT-формате
+         *
+         * @param {string} str - Исходная строка
+         * @returns {string} - Экранированная строка
+         */
+        function escapeDotString(str) {
+            // Экранируем кавычки и обратные слеши
+            return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        }
+
+        /**
+         * Генерирует уникальный идентификатор узла для DOT
+         *
+         * @param {string} value - Значение узла
+         * @returns {string} - Уникальный идентификатор
+         */
+        function generateNodeId(value) {
+            // Создаем хеш из строки для уникального ID
+            let hash = 0;
+            for (let i = 0; i < value.length; i++) {
+                const char = value.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Преобразуем в 32-битное целое
+            }
+            return 'node' + Math.abs(hash);
+        }
+
+        // ============================================================================
+        // ГЕНЕРАЦИЯ DOT-КОДА С ПРИМЕНЕНИЕМ СТИЛЕЙ
+        // ============================================================================
+
+        /**
+         * Преобразует RDF триплеты в DOT-код для Graphviz с применением стилей
+         *
+         * АЛГОРИТМ:
+         * 1. Строит кэш типов для узлов (для определения стилей на основе rdf:type)
+         * 2. Создает узлы с применением стилей из StyleName.nodeStyles
+         * 3. Создает ребра с применением стилей из StyleName.edgeStyles
+         * 4. Формирует DOT-код с учетом всех стилей
+         *
+         * @param {Array} quads - Массив RDF триплетов (quads)
+         * @param {Object} prefixes - Объект с префиксами (prefix -> namespace)
+         * @returns {string} - DOT-код графа
+         */
+        /**
+         * Проверяет, содержит ли предикат "name" или "label"
+         * (определяет, использовать ли обычный или мелкий шрифт в режиме агрегации)
+         *
+         * @param {string} predicateLabel - Prefixed name предиката
+         * @returns {boolean} - true если предикат содержит "name" или "label"
+         */
+        function isNameOrLabelPredicate(predicateLabel) {
+            const lowerPredicate = predicateLabel.toLowerCase();
+            return lowerPredicate.includes('name') || lowerPredicate.includes('label');
+        }
+
+        /**
+         * Экранирует специальные символы для использования в HTML-like label DOT
+         *
+         * @param {string} str - Исходная строка
+         * @returns {string} - Экранированная строка для HTML-like label
+         */
+        function escapeHtmlLabel(str) {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        /**
+         * Разбивает текст на строки с переносом по словам.
+         * Не разрывает слова, переносит целыми словами.
+         *
+         * @param {string} text - Исходный текст
+         * @param {number} maxLength - Максимальная длина строки
+         * @returns {string[]} - Массив строк с переносами
+         */
+        function wrapTextByWords(text, maxLength) {
+            if (!text || text.length <= maxLength) {
+                return [text];
+            }
+
+            const words = text.split(/\s+/);
+            const lines = [];
+            let currentLine = '';
+
+            for (const word of words) {
+                if (currentLine.length === 0) {
+                    // Первое слово в строке
+                    currentLine = word;
+                } else if (currentLine.length + 1 + word.length <= maxLength) {
+                    // Слово помещается в текущую строку
+                    currentLine += ' ' + word;
+                } else {
+                    // Слово не помещается, начинаем новую строку
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+
+            // Добавляем последнюю строку
+            if (currentLine.length > 0) {
+                lines.push(currentLine);
+            }
+
+            return lines;
+        }
+
+        /**
+         * Форматирует метку узла с учетом максимальной длины для режимов агрегации и нотации.
+         * При превышении maxLength текст переносится по словам и используется меньший шрифт.
+         * Возвращает HTML-like label для DOT (с тегами <BR/>, <FONT> и т.д.)
+         *
+         * @param {string} label - Исходная метка
+         * @param {number} maxLength - Максимальная длина строки
+         * @param {boolean} isBold - Использовать жирный шрифт
+         * @returns {string} - Отформатированная HTML-like метка для DOT
+         */
+        function formatLabelWithWrap(label, maxLength, isBold = false) {
+            const lines = wrapTextByWords(label, maxLength);
+            const needsWrap = lines.length > 1;
+
+            // Если нет переноса, возвращаем простую метку
+            if (!needsWrap) {
+                if (isBold) {
+                    return `<B>${escapeHtmlLabel(label)}</B>`;
+                }
+                return escapeHtmlLabel(label);
+            }
+
+            // При переносе используем мелкий шрифт (POINT-SIZE="9")
+            let result = '';
+            for (let i = 0; i < lines.length; i++) {
+                if (i > 0) {
+                    result += '<BR/>';
+                }
+                const escapedLine = escapeHtmlLabel(lines[i]);
+                if (isBold) {
+                    result += `<FONT POINT-SIZE="9"><B>${escapedLine}</B></FONT>`;
+                } else {
+                    result += `<FONT POINT-SIZE="9">${escapedLine}</FONT>`;
+                }
+            }
+
+            return result;
+        }
+
+        /**
+         * Преобразует RDF триплеты в DOT-код для Graphviz в режиме агрегации
+         * В этом режиме литералы агрегируются внутри узла субъекта
+         *
+         * @param {Array} quads - Массив RDF триплетов (quads)
+         * @param {Object} prefixes - Объект с префиксами (prefix -> namespace)
+         * @returns {string} - DOT-код графа
+         */
+        function rdfToDotAggregation(quads, prefixes = {}) {
+            // Строим кэш типов для определения стилей узлов
+            // ВАЖНО: используем currentQuads (оригинальные данные), а не отфильтрованные quads,
+            // чтобы информация о типах сохранялась даже когда rdf:type скрыт в фильтрах
+            buildNodeTypesCache(currentQuads, prefixes);
+
+            // Очищаем маппинг label -> URI
+            nodeLabelToUri = {};
+
+            // Множества для хранения уникальных узлов и ребер
+            const nodes = new Map(); // Карта: значение -> информация об узле
+            const edges = [];        // Массив ребер (только не-литеральные связи)
+
+            // Карта для хранения литералов узла: subjectValue -> [{predicate, value, isNameLabel}]
+            const nodeLiterals = new Map();
+
+            // Обрабатываем каждый триплет
+            quads.forEach(quad => {
+                const subject = quad.subject;
+                const predicate = quad.predicate;
+                const object = quad.object;
+
+                const subjectValue = subject.value;
+                const predicateValue = predicate.value;
+                const objectValue = object.value;
+
+                const subjectLabel = getPrefixedName(subjectValue, prefixes);
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
+
+                // Создаем субъект, если он еще не существует
+                if (!nodes.has(subjectValue)) {
+                    const nodeId = generateNodeId(subjectValue);
+                    nodes.set(subjectValue, {
+                        id: nodeId,
+                        label: subjectLabel,
+                        value: subjectValue,
+                        isUri: subject.termType === 'NamedNode',
+                        isBlank: subject.termType === 'BlankNode',
+                        isLiteral: false
+                    });
+                    nodeLabelToUri[subjectLabel] = { uri: subjectValue, dotId: nodeId };
+                    nodeLiterals.set(subjectValue, []);
+                }
+
+                if (object.termType === 'Literal') {
+                    // Агрегируем литералы в узле субъекта
+                    const literals = nodeLiterals.get(subjectValue);
+                    literals.push({
+                        predicate: predicateLabel,
+                        value: objectValue,
+                        isNameLabel: isNameOrLabelPredicate(predicateLabel)
+                    });
+                } else {
+                    // Объект - не литерал, создаем отдельный узел
+                    const objectLabel = getPrefixedName(objectValue, prefixes);
+
+                    if (!nodes.has(objectValue)) {
+                        const nodeId = generateNodeId(objectValue);
+                        nodes.set(objectValue, {
+                            id: nodeId,
+                            label: objectLabel,
+                            value: objectValue,
+                            isUri: object.termType === 'NamedNode',
+                            isLiteral: false,
+                            isBlank: object.termType === 'BlankNode'
+                        });
+                        nodeLabelToUri[objectLabel] = { uri: objectValue, dotId: nodeId };
+                        if (!nodeLiterals.has(objectValue)) {
+                            nodeLiterals.set(objectValue, []);
+                        }
+                    }
+
+                    // Добавляем ребро
+                    edges.push({
+                        from: nodes.get(subjectValue).id,
+                        to: nodes.get(objectValue).id,
+                        label: predicateLabel,
+                        predicateUri: predicateValue
+                    });
+                }
+            });
+
+            // ====================================================================
+            // ГЕНЕРАЦИЯ DOT-КОДА
+            // ====================================================================
+
+            let dot = 'digraph RDFGraph {\n';
+
+            // Настройки графа
+            dot += '    // Настройки графа (режим агрегации)\n';
+            dot += '    rankdir=LR;\n';
+            // В режиме агрегации форма по умолчанию - ellipse (переопределяется стилями)
+            dot += '    node [fontname="Arial", shape="ellipse"];\n';
+            dot += '    edge [fontname="Arial", fontsize=10];\n';
+            dot += '\n';
+
+            // ====================================================================
+            // Добавляем узлы с агрегированными литералами
+            // ====================================================================
+            dot += '    // Узлы графа с агрегированными литералами (эллипс, текст строками)\n';
+
+            nodes.forEach((nodeInfo, value) => {
+                const literals = nodeLiterals.get(value) || [];
+
+                // Формируем простой текстовый label для эллипса
+                // Формат: строки с переносами (\n)
+                // Верхние строки - обычным шрифтом (name/label), нижние - мелким
+
+                // Сортируем литералы: сначала name/label (обычный шрифт), потом остальные (мелкий)
+                const nameLabelLiterals = literals.filter(l => l.isNameLabel);
+                const otherLiterals = literals.filter(l => !l.isNameLabel);
+
+                // Формируем HTML-like label для простого многострочного текста в эллипсе
+                // Используем <BR/> для переноса строк и FONT для разных размеров
+                let htmlLabel = '<';
+
+                // Первая строка (идентификатор) - жирным шрифтом с переносом по словам
+                htmlLabel += formatLabelWithWrap(nodeInfo.label, currentMaxLabelLength, true);
+
+                // Счетчик добавленных строк (для ограничения MaxAggregationParams)
+                let addedLines = 1;
+
+                // Добавляем name/label литералы (обычный шрифт с переносом по словам)
+                for (const lit of nameLabelLiterals) {
+                    if (addedLines >= MaxAggregationParams) break;
+                    htmlLabel += '<BR/>';
+                    htmlLabel += formatLabelWithWrap(lit.value, currentMaxLabelLength, false);
+                    addedLines++;
+                }
+
+                // Добавляем остальные литералы (мелкий шрифт через FONT тег с переносом по словам)
+                for (const lit of otherLiterals) {
+                    if (addedLines >= MaxAggregationParams) break;
+                    htmlLabel += '<BR/>';
+                    // Формат: "predicate: value" для остальных литералов
+                    const fullText = lit.predicate + ': ' + lit.value;
+                    const wrappedLines = wrapTextByWords(fullText, currentMaxLabelLength);
+                    for (let j = 0; j < wrappedLines.length; j++) {
+                        if (j > 0) htmlLabel += '<BR/>';
+                        htmlLabel += `<FONT POINT-SIZE="8">${escapeHtmlLabel(wrappedLines[j])}</FONT>`;
+                    }
+                    addedLines++;
+                }
+
+                htmlLabel += '>';
+
+                // Получаем стиль для узла (всегда эллипс в режиме агрегации)
+                const nodeStyle = getNodeStyle(nodeInfo.value, false, nodeInfo.isBlank);
+
+                // Формируем определение узла с HTML-like label
+                dot += `    ${nodeInfo.id} [label=${htmlLabel} ${nodeStyle}];\n`;
+            });
+
+            dot += '\n';
+
+            // ====================================================================
+            // Добавляем ребра с применением стилей
+            // ====================================================================
+            dot += '    // Ребра графа (только не-литеральные связи)\n';
+
+            edges.forEach(edge => {
+                const edgeStyle = getEdgeStyle(edge.predicateUri, edge.label);
+                dot += `    ${edge.from} -> ${edge.to} [label="${escapeDotString(edge.label)}" ${edgeStyle}];\n`;
+            });
+
+            dot += '}\n';
+
+            return dot;
+        }
+
+        function rdfToDot(quads, prefixes = {}) {
+            // В режиме агрегации используем специальную функцию
+            if (currentMode === 'aggregation') {
+                return rdfToDotAggregation(quads, prefixes);
+            }
+
+            // Строим кэш типов для определения стилей узлов
+            // ВАЖНО: используем currentQuads (оригинальные данные), а не отфильтрованные quads,
+            // чтобы информация о типах сохранялась даже когда rdf:type скрыт в фильтрах
+            buildNodeTypesCache(currentQuads, prefixes);
+
+            // Очищаем маппинг label -> URI
+            nodeLabelToUri = {};
+
+            // Множества для хранения уникальных узлов и ребер
+            const nodes = new Map(); // Карта: значение -> информация об узле
+            const edges = [];        // Массив ребер
+
+            // Множество использованных префиксов для блока Namespaces
+            const usedPrefixes = new Set();
+
+            // Обрабатываем каждый триплет
+            quads.forEach(quad => {
+                // Извлекаем компоненты триплета
+                const subject = quad.subject;
+                const predicate = quad.predicate;
+                const object = quad.object;
+
+                // Получаем значения для отображения
+                const subjectValue = subject.value;
+                const predicateValue = predicate.value;
+                const objectValue = object.value;
+
+                // Получаем имена с префиксами для читаемости
+                const subjectLabel = getPrefixedName(subjectValue, prefixes);
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
+                const objectLabel = object.termType === 'Literal'
+                    ? `"${objectValue}"`
+                    : getPrefixedName(objectValue, prefixes);
+
+                // Отслеживаем использованные префиксы
+                for (const [prefix, namespace] of Object.entries(prefixes)) {
+                    if (subjectValue.startsWith(namespace) ||
+                        predicateValue.startsWith(namespace) ||
+                        (object.termType !== 'Literal' && objectValue.startsWith(namespace))) {
+                        usedPrefixes.add(prefix);
+                    }
+                }
+
+                // Создаем узлы, если они еще не существуют
+                if (!nodes.has(subjectValue)) {
+                    const nodeId = generateNodeId(subjectValue);
+                    nodes.set(subjectValue, {
+                        id: nodeId,
+                        label: subjectLabel,
+                        value: subjectValue,
+                        isUri: subject.termType === 'NamedNode',
+                        isBlank: subject.termType === 'BlankNode',
+                        isLiteral: false
+                    });
+                    // Добавляем маппинг для обратного поиска при клике
+                    nodeLabelToUri[subjectLabel] = { uri: subjectValue, dotId: nodeId };
+                }
+
+                if (!nodes.has(objectValue)) {
+                    const nodeId = generateNodeId(objectValue);
+                    nodes.set(objectValue, {
+                        id: nodeId,
+                        label: objectLabel,
+                        value: objectValue,
+                        isUri: object.termType === 'NamedNode',
+                        isLiteral: object.termType === 'Literal',
+                        isBlank: object.termType === 'BlankNode'
+                    });
+                    // Добавляем маппинг для обратного поиска при клике
+                    nodeLabelToUri[objectLabel] = { uri: objectValue, dotId: nodeId };
+                }
+
+                // Добавляем ребро с информацией о предикате
+                edges.push({
+                    from: nodes.get(subjectValue).id,
+                    to: nodes.get(objectValue).id,
+                    label: predicateLabel,
+                    predicateUri: predicateValue
+                });
+            });
+
+            // ====================================================================
+            // ГЕНЕРАЦИЯ DOT-КОДА
+            // ====================================================================
+
+            let dot = 'digraph RDFGraph {\n';
+
+            // Настройки графа
+            dot += '    // Настройки графа\n';
+            dot += '    rankdir=LR;\n';           // Направление слева направо
+            dot += '    node [fontname="Arial"];\n';
+            dot += '    edge [fontname="Arial", fontsize=10];\n';
+            dot += '\n';
+
+            // ====================================================================
+            // Добавляем узлы с применением стилей
+            // ====================================================================
+            dot += '    // Узлы графа (субъекты и объекты)\n';
+            dot += '    // Стили применяются на основе rdf:type узла\n';
+
+            nodes.forEach((nodeInfo, value) => {
+                // Получаем стиль для узла на основе его типа
+                const nodeStyle = getNodeStyle(nodeInfo.value, nodeInfo.isLiteral, nodeInfo.isBlank);
+
+                // В режиме нотации применяем перенос по словам для длинных меток
+                if (currentMode === 'notation' && nodeInfo.label.length > currentMaxLabelLength) {
+                    // Используем HTML-like label с переносом по словам
+                    const wrappedLabel = formatLabelWithWrap(nodeInfo.label, currentMaxLabelLength, false);
+                    dot += `    ${nodeInfo.id} [label=<${wrappedLabel}> ${nodeStyle}];\n`;
+                } else {
+                    // Для коротких меток и базового режима - обычный label
+                    dot += `    ${nodeInfo.id} [label="${escapeDotString(nodeInfo.label)}" ${nodeStyle}];\n`;
+                }
+            });
+
+            dot += '\n';
+
+            // ====================================================================
+            // Добавляем ребра с применением стилей
+            // ====================================================================
+            dot += '    // Ребра графа (предикаты)\n';
+            dot += '    // Стили применяются на основе URI предиката\n';
+
+            edges.forEach(edge => {
+                // Получаем стиль для ребра на основе предиката
+                const edgeStyle = getEdgeStyle(edge.predicateUri, edge.label);
+
+                // Формируем определение ребра
+                dot += `    ${edge.from} -> ${edge.to} [label="${escapeDotString(edge.label)}" ${edgeStyle}];\n`;
+            });
+
+            dot += '}\n';
+
+            return dot;
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ОТОБРАЖЕНИЯ
+        // ============================================================================
+
+        /**
+         * Показывает индикатор загрузки
+         */
+        function showLoading() {
+            const output = document.getElementById('output');
+            const resultContainer = document.getElementById('result-container');
+
+            resultContainer.style.display = 'block';
+            output.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Обработка RDF данных...</p>
+                </div>
+            `;
+
+            // Скрываем панели во время загрузки
+            document.getElementById('export-buttons').style.display = 'none';
+            document.getElementById('zoom-controls').style.display = 'none';
+            document.getElementById('prefixes-panel').style.display = 'none';
+            document.getElementById('legend-panel').style.display = 'none';
+            document.getElementById('filter-panel').style.display = 'none';
+        }
+
+        /**
+         * Показывает сообщение об ошибке
+         *
+         * @param {string} message - Текст ошибки
+         */
+        function showError(message) {
+            const output = document.getElementById('output');
+            const resultContainer = document.getElementById('result-container');
+
+            resultContainer.style.display = 'block';
+            output.innerHTML = `<div class="error"><strong>Ошибка:</strong> ${message}</div>`;
+
+            // Скрываем панели при ошибке
+            document.getElementById('export-buttons').style.display = 'none';
+            document.getElementById('zoom-controls').style.display = 'none';
+            document.getElementById('prefixes-panel').style.display = 'none';
+            document.getElementById('legend-panel').style.display = 'none';
+            document.getElementById('filter-panel').style.display = 'none';
+        }
+
+        /**
+         * Отображает панель префиксов с кликабельными URL
+         *
+         * @param {Object} prefixes - Объект с префиксами (prefix -> namespace)
+         */
+        function displayPrefixes(prefixes) {
+            const prefixesPanel = document.getElementById('prefixes-panel');
+            const prefixesContent = document.getElementById('prefixes-content');
+
+            // Получаем список использованных префиксов
+            const prefixEntries = Object.entries(prefixes);
+
+            // Если нет префиксов, скрываем панель
+            if (prefixEntries.length === 0) {
+                prefixesPanel.style.display = 'none';
+                return;
+            }
+
+            // Сортируем префиксы по имени
+            prefixEntries.sort((a, b) => a[0].localeCompare(b[0]));
+
+            // Формируем HTML для отображения префиксов
+            let html = '';
+            for (const [prefix, namespace] of prefixEntries) {
+                // Создаем кликабельную ссылку для namespace
+                html += `<div class="prefix-line">`;
+                html += `<span class="prefix-name">@prefix ${prefix}:</span> `;
+                html += `<a href="${namespace}" class="prefix-url" target="_blank">&lt;${namespace}&gt;</a> .`;
+                html += `</div>`;
+            }
+
+            prefixesContent.innerHTML = html;
+            prefixesPanel.style.display = 'block';
+        }
+
+        /**
+         * Отображает легенду стилей
+         *
+         * Показывает все используемые стили для узлов и ребер
+         * с визуальным представлением каждого стиля
+         */
+        function displayLegend() {
+            const legendPanel = document.getElementById('legend-panel');
+            const legendContent = document.getElementById('legend-content');
+
+            let html = '';
+
+            // ====================================================================
+            // Секция стилей узлов
+            // В режиме агрегации используем AggregationNodeStyles
+            // ====================================================================
+            html += '<div class="legend-section">';
+            html += '<h4>Стили узлов (Node Styles)</h4>';
+
+            // Выбираем источник стилей в зависимости от режима
+            const nodeStylesSource = currentMode === 'aggregation' ? AggregationNodeStyles : StyleName.nodeStyles;
+
+            for (const [styleName, styleConfig] of Object.entries(nodeStylesSource)) {
+                // Извлекаем цвета из DOT-строки для визуализации
+                const fillColorMatch = styleConfig.dot.match(/fillcolor="([^"]+)"/);
+                const borderColorMatch = styleConfig.dot.match(/color="([^"]+)"/);
+                const shapeMatch = styleConfig.dot.match(/shape="([^"]+)"/);
+
+                const fillColor = fillColorMatch ? fillColorMatch[1] : '#ffffff';
+                const borderColor = borderColorMatch ? borderColorMatch[1] : '#000000';
+                const shape = shapeMatch ? shapeMatch[1] : 'ellipse';
+
+                // Определяем CSS-стиль для формы
+                let shapeStyle = '';
+                if (shape === 'box' || shape === 'note') {
+                    shapeStyle = 'border-radius: 0;';
+                } else if (shape === 'octagon') {
+                    shapeStyle = 'border-radius: 0; clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);';
+                } else {
+                    shapeStyle = 'border-radius: 50%;';
+                }
+
+                html += `<div class="legend-item">`;
+                html += `<div class="legend-shape" style="background-color: ${fillColor}; border-color: ${borderColor}; ${shapeStyle}"></div>`;
+                html += `<span class="legend-label">${styleConfig.label}</span>`;
+                html += `</div>`;
+            }
+
+            html += '</div>';
+
+            // ====================================================================
+            // Секция стилей ребер
+            // ====================================================================
+            html += '<div class="legend-section">';
+            html += '<h4>Стили ребер (Edge Styles)</h4>';
+
+            for (const [styleName, styleConfig] of Object.entries(StyleName.edgeStyles)) {
+                // Извлекаем параметры из DOT-строки
+                const colorMatch = styleConfig.dot.match(/color="([^"]+)"/);
+                const penwidthMatch = styleConfig.dot.match(/penwidth="([^"]+)"/);
+                const lineStyleMatch = styleConfig.dot.match(/style="([^"]+)"/);
+
+                const color = colorMatch ? colorMatch[1] : '#666666';
+                const penwidth = penwidthMatch ? parseInt(penwidthMatch[1]) : 1;
+                const lineStyle = lineStyleMatch ? lineStyleMatch[1] : 'solid';
+
+                // Определяем CSS-стиль линии
+                let borderStyle = 'solid';
+                if (lineStyle === 'dashed') borderStyle = 'dashed';
+                if (lineStyle === 'dotted') borderStyle = 'dotted';
+
+                html += `<div class="legend-item">`;
+                html += `<span class="legend-line" style="background-color: ${color}; height: ${penwidth + 1}px; border-bottom: ${penwidth}px ${borderStyle} ${color}; background: none;"></span>`;
+                html += `<span class="legend-label">${styleConfig.label}</span>`;
+                html += `</div>`;
+            }
+
+            html += '</div>';
+
+            legendContent.innerHTML = html;
+            legendPanel.style.display = 'block';
+        }
+
+        // ============================================================================
+        // ОСНОВНАЯ ФУНКЦИЯ ВИЗУАЛИЗАЦИИ
+        // ============================================================================
+
+        /**
+         * Основная функция визуализации RDF данных
+         * Парсит RDF, применяет стили, генерирует DOT-код и рендерит граф
+         */
+        async function visualize() {
+            // Получаем входные данные
+            const rdfInput = document.getElementById('rdf-input').value.trim();
+            const inputFormat = document.getElementById('input-format').value;
+            const outputFormat = document.getElementById('output-format').value;
+            const layoutEngine = document.getElementById('layout-engine').value;
+            const visualizationMode = document.getElementById('visualization-mode').value;
+
+            // Получаем значение максимальной длины наименования из настроек
+            const maxLabelLengthInput = document.getElementById('max-label-length');
+            const maxLabelLengthValue = parseInt(maxLabelLengthInput.value, 10);
+            // Проверяем валидность и обновляем глобальную переменную
+            if (!isNaN(maxLabelLengthValue) && maxLabelLengthValue >= 5 && maxLabelLengthValue <= 200) {
+                currentMaxLabelLength = maxLabelLengthValue;
+            } else {
+                // Восстанавливаем значение по умолчанию при некорректном вводе
+                currentMaxLabelLength = DEFAULT_MAX_LABEL_LENGTH;
+                maxLabelLengthInput.value = DEFAULT_MAX_LABEL_LENGTH;
+            }
+
+            // Сохраняем текущий режим визуализации
+            currentMode = visualizationMode;
+
+            // Проверяем, что данные введены
+            if (!rdfInput) {
+                showError('Пожалуйста, введите RDF данные');
+                return;
+            }
+
+            // Показываем индикатор загрузки
+            showLoading();
+
+            // Отключаем кнопку на время обработки
+            const button = document.getElementById('visualize-btn');
+            button.disabled = true;
+            button.textContent = 'Обработка...';
+
+            try {
+                // Шаг 1: Парсинг RDF данных с помощью N3.js
+                // N3.Parser поддерживает Turtle, N-Triples, N-Quads и TriG
+                const parser = new N3.Parser({ format: inputFormat });
+                const quads = [];
+                let prefixes = {};
+
+                // Парсим RDF данные
+                // N3.js использует callback-based API
+                await new Promise((resolve, reject) => {
+                    parser.parse(rdfInput, (error, quad, parsedPrefixes) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+                        if (quad) {
+                            quads.push(quad);
+                        } else {
+                            // null quad означает конец парсинга
+                            // parsedPrefixes содержит все найденные префиксы
+                            if (parsedPrefixes) {
+                                prefixes = parsedPrefixes;
+                            }
+                            resolve();
+                        }
+                    });
+                });
+
+                // Сохраняем префиксы в глобальную переменную
+                currentPrefixes = prefixes;
+
+                // Сохраняем триплеты в глобальную переменную для функции отображения свойств
+                currentQuads = quads;
+
+                // Сбрасываем N3 Store для пересоздания при следующем SPARQL запросе
+                currentStore = null;
+
+                // Проверяем, что получены триплеты
+                if (quads.length === 0) {
+                    showError('Не найдено RDF триплетов в данных');
+                    return;
+                }
+
+                // Сбрасываем фильтры на значения по умолчанию для текущего режима
+                activeFilters = [...getFilterConfig(currentMode).hiddenPredicates];
+
+                // Фильтруем триплеты для визуализации (но сохраняем оригинальные currentQuads)
+                const filteredQuads = quads.filter(quad => {
+                    const predicateUri = quad.predicate.value;
+                    const predicateLabel = getPrefixedName(predicateUri, prefixes);
+                    return !isPredicateHidden(predicateUri, predicateLabel);
+                });
+
+                // Шаг 2: Генерация DOT-кода из отфильтрованных RDF триплетов с применением стилей
+                const dotCode = rdfToDot(filteredQuads, prefixes);
+
+                // Выводим DOT-код в консоль для отладки
+                console.log('Сгенерированный DOT-код:', dotCode);
+
+                // Шаг 3: Рендеринг графа с помощью Viz.js
+                const viz = await Viz.instance();
+
+                // Рендерим граф в SVG формате
+                const svgString = viz.renderString(dotCode, {
+                    format: 'svg',
+                    engine: layoutEngine
+                });
+
+                // Отображаем результат
+                const output = document.getElementById('output');
+
+                // Сбрасываем масштаб перед отображением нового графа
+                currentScale = 1.0;
+                applyZoom();
+
+                if (outputFormat === 'svg') {
+                    // Отображаем SVG напрямую
+                    output.innerHTML = svgString;
+                    currentSvgElement = output.querySelector('svg');
+
+                    // Показываем панели
+                    document.getElementById('export-buttons').style.display = 'block';
+                    document.getElementById('zoom-controls').style.display = 'flex';
+                } else if (outputFormat === 'png') {
+                    // Конвертируем SVG в PNG через Canvas
+                    const pngDataUrl = await svgToPng(svgString);
+                    output.innerHTML = `<img src="${pngDataUrl}" alt="RDF Graph" style="max-width: 100%;">`;
+                    currentSvgElement = null;
+
+                    // Сохраняем SVG для экспорта
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = svgString;
+                    currentSvgElement = tempDiv.querySelector('svg');
+
+                    // Показываем панели
+                    document.getElementById('export-buttons').style.display = 'block';
+                    document.getElementById('zoom-controls').style.display = 'flex';
+                } else if (outputFormat === 'drawio') {
+                    // Для Draw.io формата показываем SVG как превью
+                    // Скачивание Draw.io файла происходит только по кнопке "Скачать Drawio"
+                    output.innerHTML = svgString;
+                    currentSvgElement = output.querySelector('svg');
+
+                    // Показываем панели
+                    document.getElementById('export-buttons').style.display = 'block';
+                    document.getElementById('zoom-controls').style.display = 'flex';
+                }
+
+                // Отображаем легенду стилей (в режиме нотации и агрегации)
+                if (currentMode === 'notation' || currentMode === 'aggregation') {
+                    displayLegend();
+                } else {
+                    // Скрываем легенду в базовом режиме
+                    document.getElementById('legend-panel').style.display = 'none';
+                }
+
+                // Отображаем панель префиксов
+                displayPrefixes(prefixes);
+
+                // Отображаем панель фильтров (для обоих режимов)
+                displayFilters();
+
+                // Добавляем обработчики кликов на узлы графа
+                addNodeClickHandlers();
+
+                // Закрываем все панели свойств от предыдущей визуализации
+                closeAllPropertiesPanels();
+
+                // Выводим статистику
+                console.log(`Обработано ${quads.length} триплетов`);
+                console.log('Найденные префиксы:', prefixes);
+                console.log('Маппинг узлов для кликов:', nodeLabelToUri);
+
+            } catch (error) {
+                // Обрабатываем ошибки парсинга или рендеринга
+                console.error('Ошибка визуализации:', error);
+                showError(`${error.message}`);
+            } finally {
+                // Восстанавливаем кнопку
+                button.disabled = false;
+                button.textContent = 'Визуализировать';
+            }
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ЭКСПОРТА
+        // ============================================================================
+
+        /**
+         * Конвертирует SVG строку в PNG Data URL
+         * Использует Canvas API для растеризации
+         *
+         * @param {string} svgString - SVG код
+         * @returns {Promise<string>} - Data URL изображения PNG
+         */
+        function svgToPng(svgString) {
+            return new Promise((resolve, reject) => {
+                // Создаем временный элемент для SVG
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = svgString;
+                const svgElement = tempDiv.querySelector('svg');
+
+                // Получаем размеры SVG
+                let width = parseInt(svgElement.getAttribute('width')) || 800;
+                let height = parseInt(svgElement.getAttribute('height')) || 600;
+
+                // Если размеры в pt, конвертируем в px (приблизительно)
+                const widthStr = svgElement.getAttribute('width') || '';
+                const heightStr = svgElement.getAttribute('height') || '';
+
+                if (widthStr.includes('pt')) {
+                    width = Math.ceil(parseFloat(widthStr) * 1.33);
+                }
+                if (heightStr.includes('pt')) {
+                    height = Math.ceil(parseFloat(heightStr) * 1.33);
+                }
+
+                // Создаем Canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = width * 2;  // Увеличиваем для лучшего качества
+                canvas.height = height * 2;
+                const ctx = canvas.getContext('2d');
+
+                // Масштабируем для лучшего качества
+                ctx.scale(2, 2);
+
+                // Заполняем белым фоном
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, width, height);
+
+                // Создаем изображение из SVG
+                const img = new Image();
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                img.onload = function() {
+                    // Рисуем SVG на Canvas
+                    ctx.drawImage(img, 0, 0, width, height);
+                    URL.revokeObjectURL(url);
+
+                    // Конвертируем в PNG
+                    resolve(canvas.toDataURL('image/png'));
+                };
+
+                img.onerror = function() {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('Ошибка при конвертации SVG в PNG'));
+                };
+
+                img.src = url;
+            });
+        }
+
+        /**
+         * Скачивает граф в формате SVG
+         */
+        function downloadSVG() {
+            if (!currentSvgElement) {
+                alert('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            // Получаем SVG код
+            const svgData = new XMLSerializer().serializeToString(currentSvgElement);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+
+            // Создаем ссылку для скачивания
+            const downloadLink = document.createElement('a');
+            downloadLink.href = URL.createObjectURL(svgBlob);
+            downloadLink.download = 'rdf-graph.svg';
+
+            // Инициируем скачивание
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+
+            // Освобождаем URL
+            URL.revokeObjectURL(downloadLink.href);
+        }
+
+        /**
+         * Скачивает граф в формате PNG
+         */
+        async function downloadPNG() {
+            if (!currentSvgElement) {
+                alert('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            try {
+                // Получаем SVG код
+                const svgData = new XMLSerializer().serializeToString(currentSvgElement);
+
+                // Конвертируем в PNG
+                const pngDataUrl = await svgToPng(svgData);
+
+                // Создаем ссылку для скачивания
+                const downloadLink = document.createElement('a');
+                downloadLink.href = pngDataUrl;
+                downloadLink.download = 'rdf-graph.png';
+
+                // Инициируем скачивание
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+
+            } catch (error) {
+                console.error('Ошибка при скачивании PNG:', error);
+                alert('Ошибка при создании PNG файла');
+            }
+        }
+
+        /**
+         * Глобальные переменные для хранения данных о графе для Draw.io экспорта
+         * Заполняются при визуализации графа
+         */
+        let drawioGraphData = null;
+
+        /**
+         * Преобразует DOT-параметры стиля в параметры стиля Draw.io
+         *
+         * @param {string} dotStyle - Строка параметров DOT (например, 'shape="ellipse" color="#1976D2" fillcolor="#CCE5FF"')
+         * @param {boolean} isEdge - Является ли элемент ребром
+         * @returns {string} - Строка стиля Draw.io
+         */
+        function dotStyleToDrawio(dotStyle, isEdge = false) {
+            // Парсим DOT параметры
+            const params = {};
+            const regex = /(\w+)="([^"]*)"/g;
+            let match;
+            while ((match = regex.exec(dotStyle)) !== null) {
+                params[match[1]] = match[2];
+            }
+
+            if (isEdge) {
+                // Стиль для ребра
+                let style = 'edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;';
+
+                // Цвет линии
+                if (params.color) {
+                    style += `strokeColor=${params.color};`;
+                }
+
+                // Толщина линии
+                if (params.penwidth) {
+                    style += `strokeWidth=${params.penwidth};`;
+                }
+
+                // Стиль линии
+                if (params.style === 'dashed') {
+                    style += 'dashed=1;';
+                } else if (params.style === 'dotted') {
+                    style += 'dashed=1;dashPattern=1 2;';
+                }
+
+                // Стиль стрелки
+                if (params.arrowhead === 'empty') {
+                    style += 'endArrow=open;';
+                } else if (params.arrowhead === 'vee') {
+                    style += 'endArrow=classic;';
+                } else if (params.arrowhead === 'diamond') {
+                    style += 'endArrow=diamond;';
+                } else if (params.arrowhead === 'none') {
+                    style += 'endArrow=none;';
+                } else {
+                    style += 'endArrow=classic;';
+                }
+
+                return style;
+            } else {
+                // Стиль для узла
+                let style = 'whiteSpace=wrap;html=1;';
+
+                // Форма
+                const shape = params.shape || 'ellipse';
+                if (shape === 'ellipse') {
+                    style += 'ellipse;';
+                } else if (shape === 'box') {
+                    if (params.style && params.style.includes('rounded')) {
+                        style += 'rounded=1;';
+                    } else {
+                        style += 'rounded=0;';
+                    }
+                } else if (shape === 'octagon') {
+                    style += 'shape=hexagon;perimeter=hexagonPerimeter2;';
+                } else if (shape === 'note') {
+                    style += 'shape=note;';
+                } else {
+                    style += 'ellipse;';
+                }
+
+                // Цвет заливки
+                if (params.fillcolor) {
+                    style += `fillColor=${params.fillcolor};`;
+                }
+
+                // Цвет границы
+                if (params.color) {
+                    style += `strokeColor=${params.color};`;
+                }
+
+                // Толщина границы
+                if (params.penwidth) {
+                    style += `strokeWidth=${params.penwidth};`;
+                }
+
+                // Пунктирная граница
+                if (params.style && params.style.includes('dashed')) {
+                    style += 'dashed=1;';
+                }
+
+                // Размер шрифта
+                if (params.fontsize) {
+                    style += `fontSize=${params.fontsize};`;
+                }
+
+                return style;
+            }
+        }
+
+        /**
+         * Преобразует RDF триплеты в формат Draw.io XML в режиме агрегации
+         * Литералы агрегируются в субъект-узлы (аналогично rdfToDotAggregation)
+         *
+         * @param {Array} quads - Массив RDF триплетов
+         * @param {Object} prefixes - Объект с префиксами пространств имен
+         * @returns {string} - XML строка в формате Draw.io
+         */
+        function rdfToDrawioAggregation(quads, prefixes = {}) {
+            // Строим кэш типов для определения стилей узлов
+            buildNodeTypesCache(currentQuads, prefixes);
+
+            // Множества для хранения уникальных узлов и ребер
+            const nodes = new Map();
+            const edges = [];
+
+            // Карта для хранения литералов узла: subjectValue -> [{predicate, value, isNameLabel}]
+            const nodeLiterals = new Map();
+
+            // Обрабатываем каждый триплет
+            quads.forEach(quad => {
+                const subject = quad.subject;
+                const predicate = quad.predicate;
+                const object = quad.object;
+
+                const subjectValue = subject.value;
+                const predicateValue = predicate.value;
+                const objectValue = object.value;
+
+                const subjectLabel = getPrefixedName(subjectValue, prefixes);
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
+
+                // Создаем субъект, если он еще не существует
+                if (!nodes.has(subjectValue)) {
+                    nodes.set(subjectValue, {
+                        id: `node${nodes.size + 2}`,
+                        label: subjectLabel,
+                        value: subjectValue,
+                        isLiteral: false,
+                        isBlank: subject.termType === 'BlankNode'
+                    });
+                    nodeLiterals.set(subjectValue, []);
+                }
+
+                if (object.termType === 'Literal') {
+                    // Агрегируем литералы в узле субъекта
+                    const literals = nodeLiterals.get(subjectValue);
+                    literals.push({
+                        predicate: predicateLabel,
+                        value: objectValue,
+                        isNameLabel: isNameOrLabelPredicate(predicateLabel)
+                    });
+                } else {
+                    // Объект - не литерал, создаем отдельный узел
+                    const objectLabel = getPrefixedName(objectValue, prefixes);
+
+                    if (!nodes.has(objectValue)) {
+                        nodes.set(objectValue, {
+                            id: `node${nodes.size + 2}`,
+                            label: objectLabel,
+                            value: objectValue,
+                            isLiteral: false,
+                            isBlank: object.termType === 'BlankNode'
+                        });
+                        if (!nodeLiterals.has(objectValue)) {
+                            nodeLiterals.set(objectValue, []);
+                        }
+                    }
+
+                    // Добавляем ребро (только для не-литеральных связей)
+                    edges.push({
+                        id: `edge${edges.length + 1}`,
+                        from: nodes.get(subjectValue).id,
+                        to: nodes.get(objectValue).id,
+                        label: predicateLabel,
+                        predicateUri: predicateValue
+                    });
+                }
+            });
+
+            // Генерируем Draw.io XML
+            const timestamp = new Date().toISOString();
+            let xml = `<mxfile host="app.diagrams.net" modified="${timestamp}" version="21.0.0" compressed="false" type="device">\n`;
+            xml += `  <diagram id="rdf-graph" name="RDF Graph">\n`;
+            xml += `    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">\n`;
+            xml += `      <root>\n`;
+            xml += `        <mxCell id="0"/>\n`;
+            xml += `        <mxCell id="1" parent="0"/>\n`;
+
+            // Размещаем узлы
+            const nodePositions = {};
+            let xPos = 100;
+            let yPos = 100;
+            const nodeWidth = 160;
+            const nodeHeight = 80;
+            const xSpacing = 200;
+            const ySpacing = 120;
+            const nodesPerRow = 4;
+            let nodeIndex = 0;
+
+            // Добавляем узлы с агрегированными литералами
+            nodes.forEach((nodeInfo, value) => {
+                const literals = nodeLiterals.get(value) || [];
+                const nodeStyle = getNodeStyle(nodeInfo.value, false, nodeInfo.isBlank);
+                const drawioStyle = dotStyleToDrawio(nodeStyle, false);
+
+                // Вычисляем позицию со смещением для избежания прямых линий
+                const row = Math.floor(nodeIndex / nodesPerRow);
+                const col = nodeIndex % nodesPerRow;
+                // Добавляем небольшое смещение (±15px) для избежания вертикальных/горизонтальных линий
+                const xOffset = ((nodeIndex * 17) % 31) - 15;
+                const yOffset = ((nodeIndex * 23) % 31) - 15;
+                const x = xPos + col * xSpacing + xOffset;
+                const y = yPos + row * ySpacing + yOffset;
+
+                nodePositions[nodeInfo.id] = { x, y, width: nodeWidth, height: nodeHeight };
+
+                // Формируем label с агрегированными литералами
+                // Сортируем литералы: сначала name/label, потом остальные
+                const nameLabelLiterals = literals.filter(l => l.isNameLabel);
+                const otherLiterals = literals.filter(l => !l.isNameLabel);
+
+                let labelLines = [];
+
+                // Первая строка - идентификатор узла с переносом по словам
+                const nodeIdLines = wrapTextByWords(nodeInfo.label, currentMaxLabelLength);
+                labelLines.push(...nodeIdLines);
+
+                // Счетчик добавленных элементов (для ограничения MaxAggregationParams)
+                let addedItems = 1;
+
+                // Добавляем name/label литералы с переносом по словам
+                for (const lit of nameLabelLiterals) {
+                    if (addedItems >= MaxAggregationParams) break;
+                    const wrappedLines = wrapTextByWords(lit.value, currentMaxLabelLength);
+                    labelLines.push(...wrappedLines);
+                    addedItems++;
+                }
+
+                // Добавляем остальные литералы с переносом по словам
+                for (const lit of otherLiterals) {
+                    if (addedItems >= MaxAggregationParams) break;
+                    const fullText = lit.predicate + ': ' + lit.value;
+                    const wrappedLines = wrapTextByWords(fullText, currentMaxLabelLength);
+                    labelLines.push(...wrappedLines);
+                    addedItems++;
+                }
+
+                // Объединяем строки в многострочный label
+                const multilineLabel = labelLines.join('\n');
+
+                // Экранируем специальные символы XML
+                const escapedLabel = multilineLabel
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/\n/g, '&#xa;');
+
+                // Увеличиваем высоту узла в зависимости от количества строк
+                const adjustedHeight = nodeHeight + (labelLines.length - 1) * 15;
+
+                xml += `        <mxCell id="${nodeInfo.id}" value="${escapedLabel}" style="${drawioStyle}" vertex="1" parent="1">\n`;
+                xml += `          <mxGeometry x="${x}" y="${y}" width="${nodeWidth}" height="${adjustedHeight}" as="geometry"/>\n`;
+                xml += `        </mxCell>\n`;
+
+                nodeIndex++;
+            });
+
+            // Добавляем ребра
+            edges.forEach(edge => {
+                const edgeStyle = getEdgeStyle(edge.predicateUri, edge.label);
+                const drawioEdgeStyle = dotStyleToDrawio(edgeStyle, true);
+
+                // Экранируем метку ребра
+                const escapedLabel = edge.label
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+
+                xml += `        <mxCell id="${edge.id}" value="${escapedLabel}" style="${drawioEdgeStyle}" edge="1" parent="1" source="${edge.from}" target="${edge.to}">\n`;
+                xml += `          <mxGeometry relative="1" as="geometry"/>\n`;
+                xml += `        </mxCell>\n`;
+            });
+
+            xml += `      </root>\n`;
+            xml += `    </mxGraphModel>\n`;
+            xml += `  </diagram>\n`;
+            xml += `</mxfile>`;
+
+            return xml;
+        }
+
+        /**
+         * Конвертирует RDF данные в формат Draw.io (несжатый XML)
+         * В режиме агрегации делегирует работу rdfToDrawioAggregation
+         *
+         * @param {Array} quads - Массив RDF триплетов
+         * @param {Object} prefixes - Объект с префиксами пространств имен
+         * @returns {string} - XML строка в формате Draw.io
+         */
+        function rdfToDrawio(quads, prefixes = {}) {
+            // В режиме агрегации используем специальную функцию
+            if (currentMode === 'aggregation') {
+                return rdfToDrawioAggregation(quads, prefixes);
+            }
+
+            // Строим кэш типов для определения стилей узлов
+            buildNodeTypesCache(currentQuads, prefixes);
+
+            // Множества для хранения уникальных узлов и ребер
+            const nodes = new Map();
+            const edges = [];
+
+            // Обрабатываем каждый триплет
+            quads.forEach(quad => {
+                const subject = quad.subject;
+                const predicate = quad.predicate;
+                const object = quad.object;
+
+                const subjectValue = subject.value;
+                const predicateValue = predicate.value;
+                const objectValue = object.value;
+
+                const subjectLabel = getPrefixedName(subjectValue, prefixes);
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
+                const objectLabel = object.termType === 'Literal'
+                    ? `"${objectValue}"`
+                    : getPrefixedName(objectValue, prefixes);
+
+                // Создаем узлы
+                if (!nodes.has(subjectValue)) {
+                    nodes.set(subjectValue, {
+                        id: `node${nodes.size + 2}`,
+                        label: subjectLabel,
+                        value: subjectValue,
+                        isLiteral: false,
+                        isBlank: subject.termType === 'BlankNode'
+                    });
+                }
+
+                if (!nodes.has(objectValue)) {
+                    nodes.set(objectValue, {
+                        id: `node${nodes.size + 2}`,
+                        label: objectLabel,
+                        value: objectValue,
+                        isLiteral: object.termType === 'Literal',
+                        isBlank: object.termType === 'BlankNode'
+                    });
+                }
+
+                // Добавляем ребро
+                edges.push({
+                    id: `edge${edges.length + 1}`,
+                    from: nodes.get(subjectValue).id,
+                    to: nodes.get(objectValue).id,
+                    label: predicateLabel,
+                    predicateUri: predicateValue
+                });
+            });
+
+            // Генерируем Draw.io XML
+            const timestamp = new Date().toISOString();
+            let xml = `<mxfile host="app.diagrams.net" modified="${timestamp}" version="21.0.0" compressed="false" type="device">\n`;
+            xml += `  <diagram id="rdf-graph" name="RDF Graph">\n`;
+            xml += `    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">\n`;
+            xml += `      <root>\n`;
+            xml += `        <mxCell id="0"/>\n`;
+            xml += `        <mxCell id="1" parent="0"/>\n`;
+
+            // Размещаем узлы
+            const nodePositions = {};
+            let xPos = 100;
+            let yPos = 100;
+            const nodeWidth = 120;
+            const nodeHeight = 60;
+            const xSpacing = 180;
+            const ySpacing = 100;
+            const nodesPerRow = 5;
+            let nodeIndex = 0;
+
+            // Добавляем узлы
+            nodes.forEach((nodeInfo, value) => {
+                const nodeStyle = getNodeStyle(nodeInfo.value, nodeInfo.isLiteral, nodeInfo.isBlank);
+                const drawioStyle = dotStyleToDrawio(nodeStyle, false);
+
+                // Вычисляем позицию со смещением для избежания прямых линий
+                const row = Math.floor(nodeIndex / nodesPerRow);
+                const col = nodeIndex % nodesPerRow;
+                // Добавляем небольшое смещение (±15px) для избежания вертикальных/горизонтальных линий
+                const xOffset = ((nodeIndex * 17) % 31) - 15;
+                const yOffset = ((nodeIndex * 23) % 31) - 15;
+                const x = xPos + col * xSpacing + xOffset;
+                const y = yPos + row * ySpacing + yOffset;
+
+                nodePositions[nodeInfo.id] = { x, y, width: nodeWidth, height: nodeHeight };
+
+                // В режиме нотации применяем перенос по словам для длинных меток
+                let labelForDrawio = nodeInfo.label;
+                let adjustedHeight = nodeHeight;
+
+                if (currentMode === 'notation' && nodeInfo.label.length > currentMaxLabelLength) {
+                    const wrappedLines = wrapTextByWords(nodeInfo.label, currentMaxLabelLength);
+                    labelForDrawio = wrappedLines.join('\n');
+                    // Увеличиваем высоту узла в зависимости от количества строк
+                    adjustedHeight = nodeHeight + (wrappedLines.length - 1) * 15;
+                }
+
+                // Экранируем специальные символы XML
+                const escapedLabel = labelForDrawio
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/\n/g, '&#xa;');
+
+                xml += `        <mxCell id="${nodeInfo.id}" value="${escapedLabel}" style="${drawioStyle}" vertex="1" parent="1">\n`;
+                xml += `          <mxGeometry x="${x}" y="${y}" width="${nodeWidth}" height="${adjustedHeight}" as="geometry"/>\n`;
+                xml += `        </mxCell>\n`;
+
+                nodeIndex++;
+            });
+
+            // Добавляем ребра
+            edges.forEach(edge => {
+                const edgeStyle = getEdgeStyle(edge.predicateUri, edge.label);
+                const drawioEdgeStyle = dotStyleToDrawio(edgeStyle, true);
+
+                // Экранируем метку ребра
+                const escapedLabel = edge.label
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+
+                xml += `        <mxCell id="${edge.id}" value="${escapedLabel}" style="${drawioEdgeStyle}" edge="1" parent="1" source="${edge.from}" target="${edge.to}">\n`;
+                xml += `          <mxGeometry relative="1" as="geometry"/>\n`;
+                xml += `        </mxCell>\n`;
+            });
+
+            xml += `      </root>\n`;
+            xml += `    </mxGraphModel>\n`;
+            xml += `  </diagram>\n`;
+            xml += `</mxfile>`;
+
+            return xml;
+        }
+
+        /**
+         * Скачивает граф в формате Draw.io (несжатый XML)
+         * Файл может быть открыт на https://app.diagrams.net/
+         * Учитывает текущие фильтры и режим визуализации (в том числе агрегацию)
+         */
+        function downloadDrawio() {
+            if (currentQuads.length === 0) {
+                alert('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            try {
+                // Фильтруем триплеты согласно текущим фильтрам
+                const filteredQuads = currentQuads.filter(quad => {
+                    const predicateUri = quad.predicate.value;
+                    const predicateLabel = getPrefixedName(predicateUri, currentPrefixes);
+                    return !isPredicateHidden(predicateUri, predicateLabel);
+                });
+
+                // Генерируем Draw.io XML (учитывает режим агрегации)
+                const drawioXml = rdfToDrawio(filteredQuads, currentPrefixes);
+
+                // Создаем Blob для скачивания
+                const blob = new Blob([drawioXml], { type: 'application/xml;charset=utf-8' });
+
+                // Создаем ссылку для скачивания
+                const downloadLink = document.createElement('a');
+                downloadLink.href = URL.createObjectURL(blob);
+                downloadLink.download = 'rdf-graph.drawio';
+
+                // Инициируем скачивание
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+
+                // Освобождаем URL
+                URL.revokeObjectURL(downloadLink.href);
+
+            } catch (error) {
+                console.error('Ошибка при скачивании Draw.io файла:', error);
+                alert('Ошибка при создании Draw.io файла');
+            }
+        }
+
+        /**
+         * Маппинг внутренних форматов на форматы параметров LDF сервиса
+         */
+        const formatMapping = {
+            'turtle': 'ttl',
+            'n-triples': 'nt',
+            'n-quads': 'nq',
+            'trig': 'trig'
+        };
+
+        /**
+         * Открывает визуализацию в новом окне через внешний LDF сервис
+         * Формирует URL с параметрами: rdf=данные&from=формат&to=png
+         */
+        function openInNewWindowLdfFi() {
+            // Получаем входные данные
+            const rdfInput = document.getElementById('rdf-input').value.trim();
+            const inputFormat = document.getElementById('input-format').value;
+
+            // Проверяем, что данные введены
+            if (!rdfInput) {
+                alert('Пожалуйста, введите RDF данные');
+                return;
+            }
+
+            // Получаем формат для параметра URL
+            const fromFormat = formatMapping[inputFormat] || 'ttl';
+
+            // Кодируем RDF данные для URL
+            // Заменяем пробелы на + для совместимости с LDF сервисом
+            const encodedRdf = encodeURIComponent(rdfInput).replace(/%20/g, '+');
+
+            // Формируем URL для внешнего сервиса
+            const serviceUrl = `https://www.ldf.fi/service/rdf-grapher?rdf=${encodedRdf}&from=${fromFormat}&to=png`;
+
+            // Открываем в новом окне
+            window.open(serviceUrl, '_blank');
+        }
+
+        /**
+         * Открывает визуализацию в новом окне через GitHub Pages (без внешнего сервиса)
+         * Формирует URL с параметрами: rdf=данные&from=формат&to=формат
+         * Аналогично работе LDF сервиса
+         */
+        function openInNewWindowGitHub() {
+            // Получаем входные данные
+            const rdfInput = document.getElementById('rdf-input').value.trim();
+            const inputFormat = document.getElementById('input-format').value;
+            const outputFormat = document.getElementById('output-format').value;
+
+            // Проверяем, что данные введены
+            if (!rdfInput) {
+                alert('Пожалуйста, введите RDF данные');
+                return;
+            }
+
+            // Получаем формат для параметра URL
+            const fromFormat = formatMapping[inputFormat] || 'ttl';
+
+            // Кодируем RDF данные для URL
+            const encodedRdf = encodeURIComponent(rdfInput).replace(/%20/g, '+');
+
+            // Определяем базовый URL для GitHub Pages
+            let baseUrl;
+            if (window.location.hostname === 'bpmbpm.github.io') {
+                baseUrl = 'https://bpmbpm.github.io/rdf-grapher/ver3/';
+            } else {
+                // Для локального тестирования используем текущий путь
+                baseUrl = window.location.origin + window.location.pathname;
+            }
+
+            // Формируем URL с параметрами
+            const serviceUrl = `${baseUrl}?rdf=${encodedRdf}&from=${fromFormat}&to=${outputFormat}`;
+
+            // Открываем в новом окне
+            window.open(serviceUrl, '_blank');
+        }
+
+        // ============================================================================
+        // ИНИЦИАЛИЗАЦИЯ
+        // ============================================================================
+
+        /**
+         * Парсит URL параметры и возвращает объект с параметрами
+         * Поддерживаемые параметры:
+         * - rdf: RDF данные (URL-encoded)
+         * - from: входной формат (ttl, nt, nq, trig)
+         * - to: выходной формат (svg, png)
+         *
+         * @returns {Object} - Объект с параметрами
+         */
+        function parseUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const params = {};
+
+            // Получаем RDF данные из параметра
+            if (urlParams.has('rdf')) {
+                params.rdf = urlParams.get('rdf');
+            }
+
+            // Получаем входной формат
+            if (urlParams.has('from')) {
+                const fromParam = urlParams.get('from');
+                // Маппинг обратный: параметры URL -> внутренние форматы
+                const reverseFormatMapping = {
+                    'ttl': 'turtle',
+                    'turtle': 'turtle',
+                    'nt': 'n-triples',
+                    'n-triples': 'n-triples',
+                    'nq': 'n-quads',
+                    'n-quads': 'n-quads',
+                    'trig': 'trig'
+                };
+                params.from = reverseFormatMapping[fromParam] || 'turtle';
+            }
+
+            // Получаем выходной формат
+            if (urlParams.has('to')) {
+                const toParam = urlParams.get('to');
+                if (toParam === 'png' || toParam === 'svg') {
+                    params.to = toParam;
+                }
+            }
+
+            return params;
+        }
+
+        /**
+         * Инициализация при загрузке страницы
+         * Проверяет URL параметры и автоматически визуализирует данные, если они переданы
+         */
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('RDF Grapher ver3 загружен');
+            console.log('Используемые библиотеки: N3.js, Viz.js');
+            console.log('Настроенные стили:', StyleName);
+            console.log('Режим по умолчанию:', Mode);
+
+            // Устанавливаем режим визуализации по умолчанию из константы Mode
+            const modeSelect = document.getElementById('visualization-mode');
+            if (modeSelect) {
+                modeSelect.value = Mode;
+                currentMode = Mode;
+                updateModeDescription();
+            }
+
+            // Парсим URL параметры
+            const params = parseUrlParams();
+
+            // Если есть RDF данные в URL, заполняем форму и визуализируем
+            if (params.rdf) {
+                console.log('Обнаружены RDF данные в URL, загружаем...');
+
+                // Заполняем текстовое поле RDF данными
+                document.getElementById('rdf-input').value = params.rdf;
+
+                // Устанавливаем входной формат, если указан
+                if (params.from) {
+                    document.getElementById('input-format').value = params.from;
+                }
+
+                // Устанавливаем выходной формат, если указан
+                if (params.to) {
+                    document.getElementById('output-format').value = params.to;
+                }
+
+                // Небольшая задержка для уверенности, что все элементы загружены
+                setTimeout(function() {
+                    visualize();
+                }, 100);
+            }
+        });
+    </script>
+</body>
+</html>
