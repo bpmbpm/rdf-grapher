@@ -480,6 +480,121 @@
             margin-top: 5px;
         }
 
+        /* SPARQL панель */
+        .sparql-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .sparql-panel.visible {
+            display: block;
+        }
+
+        .sparql-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .sparql-query-textarea {
+            width: 100%;
+            height: 120px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            resize: vertical;
+            margin-bottom: 10px;
+        }
+
+        .sparql-query-textarea:focus {
+            outline: none;
+            border-color: #9C27B0;
+            box-shadow: 0 0 5px rgba(156, 39, 176, 0.3);
+        }
+
+        .sparql-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .sparql-buttons button {
+            background-color: #9C27B0;
+            margin-top: 0;
+        }
+
+        .sparql-buttons button:hover {
+            background-color: #7B1FA2;
+        }
+
+        .sparql-results {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow: auto;
+        }
+
+        .sparql-results h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 13px;
+        }
+
+        .sparql-results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .sparql-results-table th {
+            background-color: #9C27B0;
+            color: white;
+            padding: 8px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .sparql-results-table td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            word-break: break-all;
+        }
+
+        .sparql-results-table tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .sparql-results-table .uri {
+            color: #1976D2;
+        }
+
+        .sparql-results-table .literal {
+            color: #6a1b9a;
+        }
+
+        .sparql-error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .sparql-loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
         .properties-content {
             flex: 1;
             overflow-y: auto;
@@ -672,10 +787,44 @@ ex:jane a foaf:Person ;
                     С выделением типов объектов и предикатов цветом и формами
                 </div>
             </div>
+
+            <!-- Выбор режима SPARQL -->
+            <div class="form-group">
+                <label for="sparql-mode">Режим SPARQL:</label>
+                <select id="sparql-mode" onchange="toggleSparqlPanel()">
+                    <!--
+                        Режим SPARQL:
+                        - no - без SPARQL запросов (по умолчанию)
+                        - yes - с панелью SPARQL запросов
+                    -->
+                    <option value="no" selected>No</option>
+                    <option value="yes">Yes</option>
+                </select>
+                <div class="mode-description" id="sparql-mode-description">
+                    Включите для выполнения SPARQL запросов к графу
+                </div>
+            </div>
         </div>
 
         <!-- Кнопка визуализации -->
         <button id="visualize-btn" onclick="visualize()">Визуализировать</button>
+
+        <!-- SPARQL панель (скрыта по умолчанию) -->
+        <div class="sparql-panel" id="sparql-panel">
+            <h3>SPARQL запрос:</h3>
+            <textarea class="sparql-query-textarea" id="sparql-query" placeholder="Введите SPARQL запрос...">SELECT ?s ?p ?o
+WHERE {
+    ?s ?p ?o .
+}</textarea>
+            <div class="sparql-buttons">
+                <button onclick="executeSparqlQuery()">Выполнить запрос</button>
+                <button onclick="resetSparqlQuery()">Сбросить</button>
+            </div>
+            <div class="sparql-results" id="sparql-results" style="display: none;">
+                <h4>Результаты запроса:</h4>
+                <div id="sparql-results-content"></div>
+            </div>
+        </div>
     </div>
 
     <!-- Контейнер для результата -->
@@ -743,6 +892,10 @@ ex:jane a foaf:Person ;
     <!-- Viz.js - WebAssembly сборка Graphviz для работы в браузере -->
     <script src="https://unpkg.com/@viz-js/viz@3.4.0/lib/viz-standalone.js"></script>
 
+    <!-- Подключение библиотеки Comunica для SPARQL запросов -->
+    <!-- Comunica - модульный SPARQL движок для JavaScript -->
+    <script src="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql-rdfjs/comunica-browser.js"></script>
+
     <script>
         /**
          * RDF Grapher ver2 - Основной JavaScript модуль
@@ -754,6 +907,7 @@ ex:jane a foaf:Person ;
          * 4. Рендеринг графа с помощью Viz.js
          * 5. Экспорт результата в SVG и PNG форматы
          * 6. Отображение легенды стилей
+         * 7. Выполнение SPARQL запросов с помощью Comunica
          */
 
         // ============================================================================
@@ -1058,6 +1212,18 @@ ex:jane a foaf:Person ;
         let draggedPanel = null;
         let dragOffsetX = 0;
         let dragOffsetY = 0;
+
+        // N3 Store для SPARQL запросов
+        let currentStore = null;
+
+        // Comunica SPARQL движок
+        let comunicaEngine = null;
+
+        // Стандартный SPARQL запрос по умолчанию
+        const defaultSparqlQuery = `SELECT ?s ?p ?o
+WHERE {
+    ?s ?p ?o .
+}`;
 
         // ============================================================================
         // ФУНКЦИИ РАБОТЫ СО СТИЛЯМИ
@@ -1660,6 +1826,215 @@ ex:jane a foaf:Person ;
         }
 
         // ============================================================================
+        // ФУНКЦИИ SPARQL ЗАПРОСОВ
+        // ============================================================================
+
+        /**
+         * Переключает видимость панели SPARQL
+         */
+        function toggleSparqlPanel() {
+            const sparqlMode = document.getElementById('sparql-mode');
+            const sparqlPanel = document.getElementById('sparql-panel');
+            const sparqlDescription = document.getElementById('sparql-mode-description');
+
+            if (!sparqlMode || !sparqlPanel) return;
+
+            if (sparqlMode.value === 'yes') {
+                sparqlPanel.classList.add('visible');
+                if (sparqlDescription) {
+                    sparqlDescription.textContent = 'SPARQL панель активна';
+                }
+            } else {
+                sparqlPanel.classList.remove('visible');
+                if (sparqlDescription) {
+                    sparqlDescription.textContent = 'Включите для выполнения SPARQL запросов к графу';
+                }
+            }
+        }
+
+        /**
+         * Сбрасывает SPARQL запрос к значению по умолчанию
+         */
+        function resetSparqlQuery() {
+            const sparqlQuery = document.getElementById('sparql-query');
+            if (sparqlQuery) {
+                sparqlQuery.value = defaultSparqlQuery;
+            }
+            // Очищаем результаты
+            const sparqlResults = document.getElementById('sparql-results');
+            if (sparqlResults) {
+                sparqlResults.style.display = 'none';
+            }
+        }
+
+        /**
+         * Создает N3 Store из текущих триплетов
+         */
+        function createN3Store() {
+            if (currentQuads.length === 0) {
+                throw new Error('Сначала визуализируйте RDF данные');
+            }
+
+            // Создаем новый N3 Store
+            currentStore = new N3.Store();
+
+            // Добавляем все триплеты в Store
+            currentQuads.forEach(quad => {
+                currentStore.addQuad(quad);
+            });
+
+            console.log(`Создан N3 Store с ${currentStore.size} триплетами`);
+            return currentStore;
+        }
+
+        /**
+         * Выполняет SPARQL запрос к текущим RDF данным
+         */
+        async function executeSparqlQuery() {
+            const sparqlQueryText = document.getElementById('sparql-query').value.trim();
+            const sparqlResults = document.getElementById('sparql-results');
+            const sparqlResultsContent = document.getElementById('sparql-results-content');
+
+            if (!sparqlQueryText) {
+                showSparqlError('Пожалуйста, введите SPARQL запрос');
+                return;
+            }
+
+            if (currentQuads.length === 0) {
+                showSparqlError('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            // Показываем индикатор загрузки
+            sparqlResults.style.display = 'block';
+            sparqlResultsContent.innerHTML = '<div class="sparql-loading"><div class="spinner"></div><p>Выполнение запроса...</p></div>';
+
+            try {
+                // Создаем N3 Store если еще не создан
+                if (!currentStore || currentStore.size === 0) {
+                    createN3Store();
+                }
+
+                // Проверяем доступность Comunica
+                if (typeof Comunica === 'undefined') {
+                    throw new Error('Comunica SPARQL движок не загружен. Попробуйте обновить страницу.');
+                }
+
+                // Создаем Comunica движок если еще не создан
+                if (!comunicaEngine) {
+                    comunicaEngine = new Comunica.QueryEngine();
+                    console.log('Создан Comunica QueryEngine');
+                }
+
+                console.log('Выполняем SPARQL запрос:', sparqlQueryText);
+
+                // Выполняем запрос
+                const bindingsStream = await comunicaEngine.queryBindings(sparqlQueryText, {
+                    sources: [currentStore]
+                });
+
+                // Собираем все результаты
+                const bindings = await bindingsStream.toArray();
+
+                console.log(`Получено ${bindings.length} результатов`);
+
+                // Отображаем результаты
+                displaySparqlResults(bindings, sparqlQueryText);
+
+            } catch (error) {
+                console.error('Ошибка SPARQL запроса:', error);
+                showSparqlError(error.message);
+            }
+        }
+
+        /**
+         * Отображает результаты SPARQL запроса в виде таблицы
+         *
+         * @param {Array} bindings - Массив результатов запроса
+         * @param {string} queryText - Текст запроса для извлечения переменных
+         */
+        function displaySparqlResults(bindings, queryText) {
+            const sparqlResults = document.getElementById('sparql-results');
+            const sparqlResultsContent = document.getElementById('sparql-results-content');
+
+            if (bindings.length === 0) {
+                sparqlResultsContent.innerHTML = '<p style="color: #666; font-style: italic;">Нет результатов для данного запроса</p>';
+                sparqlResults.style.display = 'block';
+                return;
+            }
+
+            // Извлекаем переменные из первого результата
+            const firstBinding = bindings[0];
+            const variables = [];
+
+            // Собираем имена переменных
+            for (const [key, value] of firstBinding) {
+                variables.push(key.value);
+            }
+
+            // Создаем HTML таблицу
+            let html = '<table class="sparql-results-table">';
+
+            // Заголовок таблицы
+            html += '<thead><tr>';
+            variables.forEach(v => {
+                html += `<th>?${v}</th>`;
+            });
+            html += '</tr></thead>';
+
+            // Тело таблицы
+            html += '<tbody>';
+            bindings.forEach(binding => {
+                html += '<tr>';
+                variables.forEach(v => {
+                    const term = binding.get(v);
+                    if (term) {
+                        const value = term.value;
+                        const isLiteral = term.termType === 'Literal';
+                        const displayValue = isLiteral ? `"${value}"` : getPrefixedName(value, currentPrefixes);
+                        const cssClass = isLiteral ? 'literal' : 'uri';
+                        html += `<td class="${cssClass}">${escapeHtml(displayValue)}</td>`;
+                    } else {
+                        html += '<td>-</td>';
+                    }
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+
+            // Добавляем информацию о количестве результатов
+            html += `<p style="margin-top: 10px; color: #666; font-size: 12px;">Найдено результатов: ${bindings.length}</p>`;
+
+            sparqlResultsContent.innerHTML = html;
+            sparqlResults.style.display = 'block';
+        }
+
+        /**
+         * Показывает сообщение об ошибке SPARQL
+         *
+         * @param {string} message - Текст ошибки
+         */
+        function showSparqlError(message) {
+            const sparqlResults = document.getElementById('sparql-results');
+            const sparqlResultsContent = document.getElementById('sparql-results-content');
+
+            sparqlResultsContent.innerHTML = `<div class="sparql-error"><strong>Ошибка:</strong> ${escapeHtml(message)}</div>`;
+            sparqlResults.style.display = 'block';
+        }
+
+        /**
+         * Экранирует HTML символы для безопасного отображения
+         *
+         * @param {string} text - Исходный текст
+         * @returns {string} - Экранированный текст
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================================================
         // ФУНКЦИИ ЗАГРУЗКИ ПРИМЕРОВ
         // ============================================================================
 
@@ -2241,6 +2616,9 @@ ex:organizations {
 
                 // Сохраняем триплеты в глобальную переменную для функции отображения свойств
                 currentQuads = quads;
+
+                // Сбрасываем N3 Store для пересоздания при следующем SPARQL запросе
+                currentStore = null;
 
                 // Проверяем, что получены триплеты
                 if (quads.length === 0) {
