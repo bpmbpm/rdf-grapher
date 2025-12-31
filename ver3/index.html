@@ -1081,6 +1081,19 @@ WHERE {
         }
 
         // ============================================================================
+        // КОНФИГУРАЦИЯ АГРЕГАЦИИ (Aggregation)
+        // ============================================================================
+
+        /**
+         * MaxAggregationParams - Максимальное количество параметров (строк) для
+         * отображения в узле в режиме агрегации.
+         *
+         * В режиме агрегации все литералы помещаются в общий узел,
+         * и это значение ограничивает количество отображаемых строк.
+         */
+        const MaxAggregationParams = 5;
+
+        // ============================================================================
         // КОНФИГУРАЦИЯ СТИЛЕЙ (StyleName)
         // ============================================================================
 
@@ -2935,9 +2948,6 @@ ex:organizations {
             // ====================================================================
             dot += '    // Узлы графа с агрегированными литералами (эллипс, текст строками)\n';
 
-            // Максимальное количество параметров для отображения
-            const MAX_PARAMS = 5;
-
             nodes.forEach((nodeInfo, value) => {
                 const literals = nodeLiterals.get(value) || [];
 
@@ -2956,15 +2966,16 @@ ex:organizations {
                 labelLines.push(escapeHtmlLabel(nodeInfo.label));
 
                 // Добавляем name/label литералы (обычный шрифт)
+                // Используем глобальную константу MaxAggregationParams
                 nameLabelLiterals.forEach(lit => {
-                    if (labelLines.length < MAX_PARAMS) {
+                    if (labelLines.length < MaxAggregationParams) {
                         labelLines.push(escapeHtmlLabel(lit.value));
                     }
                 });
 
                 // Добавляем остальные литералы (мелкий шрифт через FONT тег)
                 otherLiterals.forEach(lit => {
-                    if (labelLines.length < MAX_PARAMS) {
+                    if (labelLines.length < MaxAggregationParams) {
                         // Формат: "predicate: value" для остальных литералов
                         labelLines.push(escapeHtmlLabel(lit.predicate) + ': ' + escapeHtmlLabel(lit.value));
                     }
@@ -3447,8 +3458,8 @@ ex:organizations {
                     document.getElementById('zoom-controls').style.display = 'flex';
                 }
 
-                // Отображаем легенду стилей (только в режиме нотации)
-                if (currentMode === 'notation') {
+                // Отображаем легенду стилей (в режиме нотации и агрегации)
+                if (currentMode === 'notation' || currentMode === 'aggregation') {
                     displayLegend();
                 } else {
                     // Скрываем легенду в базовом режиме
