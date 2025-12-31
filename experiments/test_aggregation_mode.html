@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Aggregation Mode</title>
+</head>
+<body>
+    <h1>Test Aggregation Mode</h1>
+    <p>This page tests the aggregation mode implementation by loading the ver3/index.html in an iframe.</p>
+
+    <h2>Test Case: Load example RDF and switch to Aggregation mode</h2>
+    <ol>
+        <li>Click "Turtle" to load example data</li>
+        <li>Select "Режим агрегации" from the dropdown</li>
+        <li>Click "Визуализировать"</li>
+        <li>Verify that:
+            <ul>
+                <li>Literals (like "John Doe", "30") are shown inside the node boxes</li>
+                <li>Name/label predicates have normal font size</li>
+                <li>Other literal predicates have smaller font size</li>
+                <li>rdf:type and rdfs:subClassOf predicates are hidden by default</li>
+            </ul>
+        </li>
+    </ol>
+
+    <iframe src="../ver3/index.html" width="100%" height="800px" style="border: 1px solid #ccc;"></iframe>
+</body>
+</html>
