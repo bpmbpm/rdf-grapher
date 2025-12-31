@@ -378,9 +378,140 @@
         .legend-label {
             color: #333;
         }
+
+        /* Панель свойств узла (слева) */
+        .properties-panel {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 350px;
+            height: 100vh;
+            background-color: white;
+            border-right: 2px solid #4CAF50;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .properties-panel.visible {
+            display: flex;
+        }
+
+        .properties-header {
+            padding: 15px;
+            background-color: #4CAF50;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .properties-header h3 {
+            margin: 0;
+            font-size: 16px;
+            word-break: break-all;
+        }
+
+        .properties-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0 5px;
+            line-height: 1;
+        }
+
+        .properties-close-btn:hover {
+            opacity: 0.8;
+        }
+
+        .properties-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .property-item {
+            margin-bottom: 12px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 3px solid #4CAF50;
+        }
+
+        .property-predicate {
+            color: #1976D2;
+            font-weight: bold;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .property-value {
+            color: #333;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        .property-value.literal {
+            color: #6a1b9a;
+        }
+
+        .property-value.uri {
+            color: #1976D2;
+        }
+
+        .properties-empty {
+            color: #666;
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .properties-type-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        /* Стили для кликабельных узлов в SVG */
+        #output svg .node {
+            cursor: pointer;
+        }
+
+        #output svg .node:hover {
+            opacity: 0.8;
+        }
+
+        /* Индикатор выбранного узла */
+        #output svg .node.selected polygon,
+        #output svg .node.selected ellipse,
+        #output svg .node.selected path {
+            stroke-width: 3;
+            stroke: #FF5722;
+        }
     </style>
 </head>
 <body>
+    <!-- Панель свойств узла (отображается при клике на узел графа) -->
+    <div class="properties-panel" id="properties-panel">
+        <div class="properties-header">
+            <h3 id="properties-node-name">Свойства узла</h3>
+            <button class="properties-close-btn" onclick="closePropertiesPanel()">&times;</button>
+        </div>
+        <div class="properties-content" id="properties-content">
+            <div class="properties-empty">Кликните на узел графа, чтобы увидеть его свойства</div>
+        </div>
+    </div>
+
     <!-- Заголовок страницы -->
     <h1>RDF Grapher ver2</h1>
 
@@ -622,7 +753,7 @@ ex:jane a foaf:Person ;
                     // - fontsize="10" - размер шрифта 10pt
                     // - style="filled" - заливка включена
                     dot: 'shape="octagon" height="0.75" width="0.75" fixedsize="true" color="Red" fillcolor="white" fontname="Arial" fontsize="10" style="filled"',
-                    label: 'Люди (Person)',
+                    label: 'Люди (foaf:Person)',
                     description: 'Объекты типа foaf:Person или schema:Person'
                 },
 
@@ -636,7 +767,7 @@ ex:jane a foaf:Person ;
                     // - fillcolor="#E6F3FF" - светло-голубая заливка
                     // - style="filled,bold" - заливка и жирная граница
                     dot: 'shape="box" height="0.6" width="1.2" color="Blue" fillcolor="#E6F3FF" fontname="Arial" fontsize="10" style="filled,bold"',
-                    label: 'Организации (Organization)',
+                    label: 'Организации (foaf:Organization)',
                     description: 'Объекты типа foaf:Organization или schema:Organization'
                 },
 
@@ -649,7 +780,7 @@ ex:jane a foaf:Person ;
                     // - color="Green" - зеленый цвет границы
                     // - fillcolor="#E8F5E9" - светло-зеленая заливка
                     dot: 'shape="note" height="0.6" width="1.0" color="Green" fillcolor="#E8F5E9" fontname="Arial" fontsize="10" style="filled"',
-                    label: 'Документы (Document)',
+                    label: 'Документы (foaf:Document)',
                     description: 'Объекты типа foaf:Document'
                 },
 
@@ -830,6 +961,15 @@ ex:jane a foaf:Person ;
 
         // Кэш типов для узлов (node URI -> array of types)
         let nodeTypesCache = {};
+
+        // Глобальная переменная для хранения всех RDF триплетов
+        let currentQuads = [];
+
+        // Маппинг label узла -> URI узла (для обратного поиска при клике)
+        let nodeLabelToUri = {};
+
+        // Текущий выбранный узел
+        let selectedNodeElement = null;
 
         // ============================================================================
         // ФУНКЦИИ РАБОТЫ СО СТИЛЯМИ
@@ -1040,6 +1180,191 @@ ex:jane a foaf:Person ;
             currentScale = Math.min(scaleX, scaleY, 1.0); // не более 100%
 
             applyZoom();
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ПАНЕЛИ СВОЙСТВ УЗЛА
+        // ============================================================================
+
+        /**
+         * Закрывает панель свойств
+         */
+        function closePropertiesPanel() {
+            const panel = document.getElementById('properties-panel');
+            panel.classList.remove('visible');
+
+            // Снимаем выделение с выбранного узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+        }
+
+        /**
+         * Получает все свойства узла по его URI
+         * Свойством считается триплет, где данный узел является субъектом
+         *
+         * @param {string} nodeUri - URI узла
+         * @returns {Array} - Массив объектов {predicate, predicateLabel, object, objectLabel, isLiteral}
+         */
+        function getNodeProperties(nodeUri) {
+            const properties = [];
+
+            currentQuads.forEach(quad => {
+                // Ищем триплеты, где наш узел является субъектом
+                if (quad.subject.value === nodeUri) {
+                    const predicateLabel = getPrefixedName(quad.predicate.value, currentPrefixes);
+                    const isLiteral = quad.object.termType === 'Literal';
+                    const objectLabel = isLiteral
+                        ? `"${quad.object.value}"`
+                        : getPrefixedName(quad.object.value, currentPrefixes);
+
+                    properties.push({
+                        predicate: quad.predicate.value,
+                        predicateLabel: predicateLabel,
+                        object: quad.object.value,
+                        objectLabel: objectLabel,
+                        isLiteral: isLiteral
+                    });
+                }
+            });
+
+            return properties;
+        }
+
+        /**
+         * Отображает свойства узла в панели
+         *
+         * @param {string} nodeUri - URI узла
+         * @param {string} nodeLabel - Отображаемое имя узла (prefixed name)
+         */
+        function showNodeProperties(nodeUri, nodeLabel) {
+            const panel = document.getElementById('properties-panel');
+            const nodeName = document.getElementById('properties-node-name');
+            const content = document.getElementById('properties-content');
+
+            // Получаем свойства узла
+            const properties = getNodeProperties(nodeUri);
+
+            // Устанавливаем заголовок
+            nodeName.textContent = nodeLabel;
+
+            // Формируем HTML для свойств
+            let html = '';
+
+            if (properties.length === 0) {
+                html = '<div class="properties-empty">У этого узла нет свойств (он не является субъектом ни одного триплета)</div>';
+            } else {
+                properties.forEach(prop => {
+                    html += '<div class="property-item">';
+                    html += `<div class="property-predicate">${prop.predicateLabel}</div>`;
+                    html += `<div class="property-value ${prop.isLiteral ? 'literal' : 'uri'}">${prop.objectLabel}</div>`;
+                    html += '</div>';
+                });
+            }
+
+            // Добавляем информацию о типах узла
+            const nodeTypes = nodeTypesCache[nodeUri] || [];
+            if (nodeTypes.length > 0) {
+                // Фильтруем только prefixed names (не полные URI)
+                const prefixedTypes = nodeTypes.filter(t => t.includes(':') && !t.startsWith('http'));
+                if (prefixedTypes.length > 0) {
+                    html += '<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">';
+                    html += '<div style="font-size: 12px; color: #666; margin-bottom: 5px;">Тип узла:</div>';
+                    prefixedTypes.forEach(type => {
+                        html += `<span class="properties-type-badge">${type}</span> `;
+                    });
+                    html += '</div>';
+                }
+            }
+
+            content.innerHTML = html;
+
+            // Показываем панель
+            panel.classList.add('visible');
+        }
+
+        /**
+         * Обработчик клика на узел SVG графа
+         *
+         * @param {Event} event - Событие клика
+         */
+        function handleNodeClick(event) {
+            // Получаем элемент узла (ищем родительский элемент с классом 'node')
+            let nodeElement = event.target;
+            while (nodeElement && !nodeElement.classList.contains('node')) {
+                nodeElement = nodeElement.parentElement;
+            }
+
+            if (!nodeElement) return;
+
+            // Снимаем выделение с предыдущего узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+            }
+
+            // Выделяем новый узел
+            nodeElement.classList.add('selected');
+            selectedNodeElement = nodeElement;
+
+            // Получаем label узла из title элемента
+            const titleElement = nodeElement.querySelector('title');
+            if (!titleElement) return;
+
+            const nodeId = titleElement.textContent;
+
+            // Ищем URI узла по его ID (DOT node ID)
+            // Узлы в nodeLabelToUri хранятся как label -> {uri, dotId}
+            let nodeUri = null;
+            let nodeLabel = nodeId;
+
+            for (const [label, info] of Object.entries(nodeLabelToUri)) {
+                if (info.dotId === nodeId) {
+                    nodeUri = info.uri;
+                    nodeLabel = label;
+                    break;
+                }
+            }
+
+            // Если не нашли по dotId, пробуем искать по label напрямую
+            if (!nodeUri && nodeLabelToUri[nodeId]) {
+                nodeUri = nodeLabelToUri[nodeId].uri;
+                nodeLabel = nodeId;
+            }
+
+            // Если все еще не нашли, пробуем использовать label как есть
+            if (!nodeUri) {
+                // Пробуем найти URI в обратном маппинге
+                for (const [label, info] of Object.entries(nodeLabelToUri)) {
+                    if (label === nodeId || info.uri === nodeId) {
+                        nodeUri = info.uri;
+                        nodeLabel = label;
+                        break;
+                    }
+                }
+            }
+
+            if (nodeUri) {
+                showNodeProperties(nodeUri, nodeLabel);
+            }
+        }
+
+        /**
+         * Добавляет обработчики кликов на узлы SVG графа
+         */
+        function addNodeClickHandlers() {
+            const output = document.getElementById('output');
+            const svg = output ? output.querySelector('svg') : null;
+
+            if (!svg) return;
+
+            // Находим все узлы (элементы с классом 'node')
+            const nodes = svg.querySelectorAll('.node');
+
+            nodes.forEach(node => {
+                node.style.cursor = 'pointer';
+                node.addEventListener('click', handleNodeClick);
+            });
         }
 
         // ============================================================================
@@ -1275,6 +1600,9 @@ ex:organizations {
             // Строим кэш типов для определения стилей узлов
             buildNodeTypesCache(quads, prefixes);
 
+            // Очищаем маппинг label -> URI
+            nodeLabelToUri = {};
+
             // Множества для хранения уникальных узлов и ребер
             const nodes = new Map(); // Карта: значение -> информация об узле
             const edges = [];        // Массив ребер
@@ -1312,25 +1640,31 @@ ex:organizations {
 
                 // Создаем узлы, если они еще не существуют
                 if (!nodes.has(subjectValue)) {
+                    const nodeId = generateNodeId(subjectValue);
                     nodes.set(subjectValue, {
-                        id: generateNodeId(subjectValue),
+                        id: nodeId,
                         label: subjectLabel,
                         value: subjectValue,
                         isUri: subject.termType === 'NamedNode',
                         isBlank: subject.termType === 'BlankNode',
                         isLiteral: false
                     });
+                    // Добавляем маппинг для обратного поиска при клике
+                    nodeLabelToUri[subjectLabel] = { uri: subjectValue, dotId: nodeId };
                 }
 
                 if (!nodes.has(objectValue)) {
+                    const nodeId = generateNodeId(objectValue);
                     nodes.set(objectValue, {
-                        id: generateNodeId(objectValue),
+                        id: nodeId,
                         label: objectLabel,
                         value: objectValue,
                         isUri: object.termType === 'NamedNode',
                         isLiteral: object.termType === 'Literal',
                         isBlank: object.termType === 'BlankNode'
                     });
+                    // Добавляем маппинг для обратного поиска при клике
+                    nodeLabelToUri[objectLabel] = { uri: objectValue, dotId: nodeId };
                 }
 
                 // Добавляем ребро с информацией о предикате
@@ -1609,6 +1943,9 @@ ex:organizations {
                 // Сохраняем префиксы в глобальную переменную
                 currentPrefixes = prefixes;
 
+                // Сохраняем триплеты в глобальную переменную для функции отображения свойств
+                currentQuads = quads;
+
                 // Проверяем, что получены триплеты
                 if (quads.length === 0) {
                     showError('Не найдено RDF триплетов в данных');
@@ -1667,9 +2004,16 @@ ex:organizations {
                 // Отображаем панель префиксов
                 displayPrefixes(prefixes);
 
+                // Добавляем обработчики кликов на узлы графа
+                addNodeClickHandlers();
+
+                // Закрываем панель свойств от предыдущей визуализации
+                closePropertiesPanel();
+
                 // Выводим статистику
                 console.log(`Обработано ${quads.length} триплетов`);
                 console.log('Найденные префиксы:', prefixes);
+                console.log('Маппинг узлов для кликов:', nodeLabelToUri);
 
             } catch (error) {
                 // Обрабатываем ошибки парсинга или рендеринга
