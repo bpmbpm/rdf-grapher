@@ -936,7 +936,7 @@ WHERE {
                 <div id="sparql-results-content"></div>
             </div>
         </div>
-        <!-- Панель фильтров (только для режима нотации) -->
+        <!-- Панель фильтров (для обоих режимов, с разными настройками по умолчанию) -->
         <div class="filter-panel" id="filter-panel" style="display: none;">
             <h3>Фильтры типов:</h3>
             <div class="filter-controls">
@@ -1023,7 +1023,7 @@ WHERE {
          * Предикаты указываются в формате prefixed name или полного URI
          */
         const Filter = {
-            // Предикаты, скрытые по умолчанию
+            // Предикаты, скрытые по умолчанию (для режима нотации)
             hiddenPredicates: [
                 'rdf:type',
                 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
@@ -1031,6 +1031,27 @@ WHERE {
                 'http://www.w3.org/2000/01/rdf-schema#subClassOf'
             ]
         };
+
+        /**
+         * FilterBase - Конфигурация фильтров для базового режима
+         *
+         * В базовом режиме по умолчанию не скрываются никакие типы объектов.
+         * hiddenPredicates - пустой массив (все предикаты видимы по умолчанию)
+         */
+        const FilterBase = {
+            // В базовом режиме по умолчанию ничего не скрыто
+            hiddenPredicates: []
+        };
+
+        /**
+         * Возвращает конфигурацию фильтров для текущего режима
+         *
+         * @param {string} mode - Режим визуализации ('base' или 'notation')
+         * @returns {Object} - Конфигурация фильтров с hiddenPredicates
+         */
+        function getFilterConfig(mode) {
+            return mode === 'base' ? FilterBase : Filter;
+        }
 
         // ============================================================================
         // КОНФИГУРАЦИЯ СТИЛЕЙ (StyleName)
@@ -1335,8 +1356,8 @@ WHERE {
 }`;
 
         // Текущие активные фильтры (предикаты, которые скрыты)
-        // Инициализируется из Filter.hiddenPredicates
-        let activeFilters = [...Filter.hiddenPredicates];
+        // Инициализируется из конфигурации фильтров для текущего режима
+        let activeFilters = [...getFilterConfig(Mode).hiddenPredicates];
 
         // Все уникальные предикаты в текущих данных (для отображения фильтров)
         let allPredicates = [];
@@ -2276,16 +2297,12 @@ WHERE {
 
         /**
          * Отображает панель фильтров с чекбоксами для каждого предиката
+         * Панель доступна для обоих режимов (base и notation),
+         * но с разными настройками по умолчанию
          */
         function displayFilters() {
             const filterPanel = document.getElementById('filter-panel');
             const filterContent = document.getElementById('filter-content');
-
-            // Показываем панель только в режиме нотации
-            if (currentMode !== 'notation') {
-                filterPanel.style.display = 'none';
-                return;
-            }
 
             // Собираем все уникальные предикаты
             allPredicates = collectAllPredicates();
@@ -3007,8 +3024,8 @@ ex:organizations {
                     return;
                 }
 
-                // Сбрасываем фильтры на значения по умолчанию при новой визуализации
-                activeFilters = [...Filter.hiddenPredicates];
+                // Сбрасываем фильтры на значения по умолчанию для текущего режима
+                activeFilters = [...getFilterConfig(currentMode).hiddenPredicates];
 
                 // Фильтруем триплеты для визуализации (но сохраняем оригинальные currentQuads)
                 const filteredQuads = quads.filter(quad => {
@@ -3074,7 +3091,7 @@ ex:organizations {
                 // Отображаем панель префиксов
                 displayPrefixes(prefixes);
 
-                // Отображаем панель фильтров (только в режиме нотации)
+                // Отображаем панель фильтров (для обоих режимов)
                 displayFilters();
 
                 // Добавляем обработчики кликов на узлы графа
