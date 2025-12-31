@@ -379,24 +379,43 @@
             color: #333;
         }
 
-        /* Панель свойств узла (слева) */
+        /* Панель свойств узла (справа, перетаскиваемая) */
         .properties-panel {
             position: fixed;
-            left: 0;
-            top: 0;
+            right: 20px;
+            top: 100px;
             width: 350px;
-            height: 100vh;
+            max-height: 70vh;
             background-color: white;
-            border-right: 2px solid #4CAF50;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
             z-index: 1000;
             display: none;
             flex-direction: column;
             overflow: hidden;
+            resize: both;
+            min-width: 280px;
+            min-height: 200px;
         }
 
         .properties-panel.visible {
             display: flex;
+        }
+
+        /* Контейнер для нескольких панелей свойств */
+        #properties-panels-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #properties-panels-container .properties-panel {
+            pointer-events: auto;
         }
 
         .properties-header {
@@ -406,12 +425,17 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            cursor: move;
+            user-select: none;
+            border-radius: 6px 6px 0 0;
         }
 
         .properties-header h3 {
             margin: 0;
-            font-size: 16px;
+            font-size: 14px;
             word-break: break-all;
+            flex: 1;
+            padding-right: 10px;
         }
 
         .properties-close-btn {
@@ -422,10 +446,38 @@
             cursor: pointer;
             padding: 0 5px;
             line-height: 1;
+            flex-shrink: 0;
         }
 
         .properties-close-btn:hover {
             opacity: 0.8;
+        }
+
+        /* Режим визуализации */
+        .mode-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+            padding: 10px 15px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+
+        .mode-selector label {
+            margin: 0;
+            font-weight: normal;
+        }
+
+        .mode-selector select {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .mode-description {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
         }
 
         .properties-content {
@@ -501,16 +553,8 @@
     </style>
 </head>
 <body>
-    <!-- Панель свойств узла (отображается при клике на узел графа) -->
-    <div class="properties-panel" id="properties-panel">
-        <div class="properties-header">
-            <h3 id="properties-node-name">Свойства узла</h3>
-            <button class="properties-close-btn" onclick="closePropertiesPanel()">&times;</button>
-        </div>
-        <div class="properties-content" id="properties-content">
-            <div class="properties-empty">Кликните на узел графа, чтобы увидеть его свойства</div>
-        </div>
-    </div>
+    <!-- Контейнер для панелей свойств узлов (отображаются при клике на узел графа) -->
+    <div id="properties-panels-container"></div>
 
     <!-- Заголовок страницы -->
     <h1>RDF Grapher ver2</h1>
@@ -611,6 +655,23 @@ ex:jane a foaf:Person ;
                     <option value="twopi">twopi (радиальная)</option>
                 </select>
             </div>
+
+            <!-- Выбор режима визуализации -->
+            <div class="form-group">
+                <label for="visualization-mode">Режим визуализации:</label>
+                <select id="visualization-mode" onchange="updateModeDescription()">
+                    <!--
+                        Режимы визуализации:
+                        - notation - с выделением объектов и предикатов цветом и формами (по умолчанию)
+                        - base - базовый режим без специальных стилей (как в ver1)
+                    -->
+                    <option value="notation" selected>Режим нотации</option>
+                    <option value="base">Базовый режим</option>
+                </select>
+                <div class="mode-description" id="mode-description">
+                    С выделением типов объектов и предикатов цветом и формами
+                </div>
+            </div>
         </div>
 
         <!-- Кнопка визуализации -->
@@ -694,6 +755,19 @@ ex:jane a foaf:Person ;
          * 5. Экспорт результата в SVG и PNG форматы
          * 6. Отображение легенды стилей
          */
+
+        // ============================================================================
+        // РЕЖИМ ВИЗУАЛИЗАЦИИ (Mode)
+        // ============================================================================
+
+        /**
+         * Mode - Режим визуализации по умолчанию
+         *
+         * Возможные значения:
+         * - 'base' - Базовый режим без выделения объектов и предикатов цветом и формами (как в ver1)
+         * - 'notation' - Режим нотации с выделением типов объектов и предикатов (по умолчанию)
+         */
+        const Mode = 'notation';
 
         // ============================================================================
         // КОНФИГУРАЦИЯ СТИЛЕЙ (StyleName)
@@ -971,18 +1045,48 @@ ex:jane a foaf:Person ;
         // Текущий выбранный узел
         let selectedNodeElement = null;
 
+        // Счетчик для уникальных ID панелей свойств
+        let propertiesPanelCounter = 0;
+
+        // Массив открытых панелей свойств
+        let openPropertiesPanels = [];
+
+        // Текущий режим визуализации ('base' или 'notation')
+        let currentMode = Mode;
+
+        // Переменные для перетаскивания панели
+        let draggedPanel = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
         // ============================================================================
         // ФУНКЦИИ РАБОТЫ СО СТИЛЯМИ
         // ============================================================================
 
         /**
+         * Базовые стили для режима 'base' (как в ver1)
+         * Все узлы отображаются одинаково без специальных цветов и форм
+         */
+        const BaseStyles = {
+            // Стиль для литералов в базовом режиме
+            literal: 'shape="box" style="filled" fillcolor="#ffffcc"',
+            // Стиль для пустых узлов в базовом режиме
+            blankNode: 'shape="ellipse" style="filled" fillcolor="#e0e0e0"',
+            // Стиль по умолчанию для URI в базовом режиме
+            uri: 'shape="ellipse" style="filled" fillcolor="#cce5ff"',
+            // Стиль для ребер в базовом режиме
+            edge: ''
+        };
+
+        /**
          * Получает стиль DOT для узла на основе его типов
          *
          * Алгоритм:
-         * 1. Если узел - литерал, возвращает LiteralStyle
-         * 2. Если узел - blank node, возвращает BlankNodeStyle
-         * 3. Ищет совпадение типов узла со стилями в StyleName.nodeStyles
-         * 4. Если совпадение не найдено, возвращает стиль по умолчанию
+         * 1. Если режим 'base', возвращает базовые стили (как в ver1)
+         * 2. Если узел - литерал, возвращает LiteralStyle
+         * 3. Если узел - blank node, возвращает BlankNodeStyle
+         * 4. Ищет совпадение типов узла со стилями в StyleName.nodeStyles
+         * 5. Если совпадение не найдено, возвращает стиль по умолчанию
          *
          * @param {string} nodeUri - URI узла
          * @param {boolean} isLiteral - флаг литерала
@@ -990,6 +1094,19 @@ ex:jane a foaf:Person ;
          * @returns {string} - строка параметров DOT для узла
          */
         function getNodeStyle(nodeUri, isLiteral, isBlankNode) {
+            // В базовом режиме используем простые стили (как в ver1)
+            if (currentMode === 'base') {
+                if (isLiteral) {
+                    return BaseStyles.literal;
+                }
+                if (isBlankNode) {
+                    return BaseStyles.blankNode;
+                }
+                return BaseStyles.uri;
+            }
+
+            // В режиме нотации используем полные стили
+
             // Специальная обработка литералов
             if (isLiteral) {
                 return StyleName.nodeStyles['LiteralStyle'].dot;
@@ -1026,14 +1143,22 @@ ex:jane a foaf:Person ;
          * Получает стиль DOT для ребра на основе предиката
          *
          * Алгоритм:
-         * 1. Ищет совпадение предиката со стилями в StyleName.edgeStyles
-         * 2. Если совпадение не найдено, возвращает стиль по умолчанию
+         * 1. Если режим 'base', возвращает пустой стиль (как в ver1)
+         * 2. Ищет совпадение предиката со стилями в StyleName.edgeStyles
+         * 3. Если совпадение не найдено, возвращает стиль по умолчанию
          *
          * @param {string} predicateUri - URI предиката
          * @param {string} predicateLabel - prefixed name предиката
          * @returns {string} - строка параметров DOT для ребра
          */
         function getEdgeStyle(predicateUri, predicateLabel) {
+            // В базовом режиме ребра не имеют специальных стилей
+            if (currentMode === 'base') {
+                return BaseStyles.edge;
+            }
+
+            // В режиме нотации используем полные стили
+
             // Ищем совпадение с определенными стилями
             for (const [styleName, styleConfig] of Object.entries(StyleName.edgeStyles)) {
                 if (styleName === 'default') continue;  // Пропускаем стиль по умолчанию
@@ -1183,15 +1308,38 @@ ex:jane a foaf:Person ;
         }
 
         // ============================================================================
-        // ФУНКЦИИ ПАНЕЛИ СВОЙСТВ УЗЛА
+        // ФУНКЦИИ ПАНЕЛИ СВОЙСТВ УЗЛА (поддержка множественных панелей)
         // ============================================================================
 
         /**
-         * Закрывает панель свойств
+         * Закрывает конкретную панель свойств по её ID
+         *
+         * @param {string} panelId - ID панели для закрытия
          */
-        function closePropertiesPanel() {
-            const panel = document.getElementById('properties-panel');
-            panel.classList.remove('visible');
+        function closePropertiesPanel(panelId) {
+            const panel = document.getElementById(panelId);
+            if (panel) {
+                panel.remove();
+                // Удаляем из массива открытых панелей
+                openPropertiesPanels = openPropertiesPanels.filter(p => p.id !== panelId);
+            }
+
+            // Снимаем выделение с выбранного узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+        }
+
+        /**
+         * Закрывает все панели свойств
+         */
+        function closeAllPropertiesPanels() {
+            const container = document.getElementById('properties-panels-container');
+            if (container) {
+                container.innerHTML = '';
+            }
+            openPropertiesPanels = [];
 
             // Снимаем выделение с выбранного узла
             if (selectedNodeElement) {
@@ -1233,33 +1381,49 @@ ex:jane a foaf:Person ;
         }
 
         /**
-         * Отображает свойства узла в панели
+         * Создает и отображает новую панель свойств узла
          *
          * @param {string} nodeUri - URI узла
          * @param {string} nodeLabel - Отображаемое имя узла (prefixed name)
          */
         function showNodeProperties(nodeUri, nodeLabel) {
-            const panel = document.getElementById('properties-panel');
-            const nodeName = document.getElementById('properties-node-name');
-            const content = document.getElementById('properties-content');
+            const container = document.getElementById('properties-panels-container');
+            if (!container) return;
+
+            // Проверяем, не открыта ли уже панель для этого узла
+            const existingPanel = openPropertiesPanels.find(p => p.uri === nodeUri);
+            if (existingPanel) {
+                // Панель уже открыта, выводим её на передний план
+                const panel = document.getElementById(existingPanel.id);
+                if (panel) {
+                    bringPanelToFront(panel);
+                }
+                return;
+            }
+
+            // Создаем новый уникальный ID для панели
+            propertiesPanelCounter++;
+            const panelId = 'properties-panel-' + propertiesPanelCounter;
+
+            // Вычисляем позицию для новой панели (смещение от предыдущих)
+            const offsetMultiplier = openPropertiesPanels.length % 5;
+            const rightOffset = 20 + (offsetMultiplier * 30);
+            const topOffset = 100 + (offsetMultiplier * 30);
 
             // Получаем свойства узла
             const properties = getNodeProperties(nodeUri);
 
-            // Устанавливаем заголовок
-            nodeName.textContent = nodeLabel;
-
             // Формируем HTML для свойств
-            let html = '';
+            let propertiesHtml = '';
 
             if (properties.length === 0) {
-                html = '<div class="properties-empty">У этого узла нет свойств (он не является субъектом ни одного триплета)</div>';
+                propertiesHtml = '<div class="properties-empty">У этого узла нет свойств (он не является субъектом ни одного триплета)</div>';
             } else {
                 properties.forEach(prop => {
-                    html += '<div class="property-item">';
-                    html += `<div class="property-predicate">${prop.predicateLabel}</div>`;
-                    html += `<div class="property-value ${prop.isLiteral ? 'literal' : 'uri'}">${prop.objectLabel}</div>`;
-                    html += '</div>';
+                    propertiesHtml += '<div class="property-item">';
+                    propertiesHtml += `<div class="property-predicate">${prop.predicateLabel}</div>`;
+                    propertiesHtml += `<div class="property-value ${prop.isLiteral ? 'literal' : 'uri'}">${prop.objectLabel}</div>`;
+                    propertiesHtml += '</div>';
                 });
             }
 
@@ -1269,19 +1433,131 @@ ex:jane a foaf:Person ;
                 // Фильтруем только prefixed names (не полные URI)
                 const prefixedTypes = nodeTypes.filter(t => t.includes(':') && !t.startsWith('http'));
                 if (prefixedTypes.length > 0) {
-                    html += '<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">';
-                    html += '<div style="font-size: 12px; color: #666; margin-bottom: 5px;">Тип узла:</div>';
+                    propertiesHtml += '<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">';
+                    propertiesHtml += '<div style="font-size: 12px; color: #666; margin-bottom: 5px;">Тип узла:</div>';
                     prefixedTypes.forEach(type => {
-                        html += `<span class="properties-type-badge">${type}</span> `;
+                        propertiesHtml += `<span class="properties-type-badge">${type}</span> `;
                     });
-                    html += '</div>';
+                    propertiesHtml += '</div>';
                 }
             }
 
-            content.innerHTML = html;
+            // Создаем HTML панели
+            const panelHtml = `
+                <div class="properties-panel visible" id="${panelId}" style="right: ${rightOffset}px; top: ${topOffset}px;">
+                    <div class="properties-header" onmousedown="startDragPanel(event, '${panelId}')">
+                        <h3>${nodeLabel}</h3>
+                        <button class="properties-close-btn" onclick="closePropertiesPanel('${panelId}')">&times;</button>
+                    </div>
+                    <div class="properties-content">
+                        ${propertiesHtml}
+                    </div>
+                </div>
+            `;
 
-            // Показываем панель
-            panel.classList.add('visible');
+            // Добавляем панель в контейнер
+            container.insertAdjacentHTML('beforeend', panelHtml);
+
+            // Регистрируем панель в массиве открытых панелей
+            openPropertiesPanels.push({
+                id: panelId,
+                uri: nodeUri,
+                label: nodeLabel
+            });
+
+            // Выводим новую панель на передний план
+            const newPanel = document.getElementById(panelId);
+            if (newPanel) {
+                bringPanelToFront(newPanel);
+            }
+        }
+
+        /**
+         * Выводит панель на передний план (увеличивает z-index)
+         *
+         * @param {HTMLElement} panel - Элемент панели
+         */
+        function bringPanelToFront(panel) {
+            // Находим максимальный z-index среди всех панелей
+            let maxZIndex = 1000;
+            openPropertiesPanels.forEach(p => {
+                const el = document.getElementById(p.id);
+                if (el) {
+                    const z = parseInt(el.style.zIndex) || 1000;
+                    if (z > maxZIndex) maxZIndex = z;
+                }
+            });
+
+            // Устанавливаем z-index выше максимального
+            panel.style.zIndex = maxZIndex + 1;
+        }
+
+        /**
+         * Начинает перетаскивание панели
+         *
+         * @param {MouseEvent} event - Событие мыши
+         * @param {string} panelId - ID перетаскиваемой панели
+         */
+        function startDragPanel(event, panelId) {
+            // Не перетаскиваем при клике на кнопку закрытия
+            if (event.target.classList.contains('properties-close-btn')) {
+                return;
+            }
+
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+
+            draggedPanel = panel;
+
+            // Вычисляем смещение курсора относительно панели
+            const rect = panel.getBoundingClientRect();
+            dragOffsetX = event.clientX - rect.left;
+            dragOffsetY = event.clientY - rect.top;
+
+            // Выводим панель на передний план
+            bringPanelToFront(panel);
+
+            // Добавляем обработчики для перетаскивания
+            document.addEventListener('mousemove', dragPanel);
+            document.addEventListener('mouseup', stopDragPanel);
+
+            // Предотвращаем выделение текста при перетаскивании
+            event.preventDefault();
+        }
+
+        /**
+         * Обработчик перетаскивания панели
+         *
+         * @param {MouseEvent} event - Событие мыши
+         */
+        function dragPanel(event) {
+            if (!draggedPanel) return;
+
+            // Вычисляем новую позицию
+            let newLeft = event.clientX - dragOffsetX;
+            let newTop = event.clientY - dragOffsetY;
+
+            // Ограничиваем позицию в пределах окна
+            const panelRect = draggedPanel.getBoundingClientRect();
+            const maxLeft = window.innerWidth - panelRect.width;
+            const maxTop = window.innerHeight - panelRect.height;
+
+            newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+            newTop = Math.max(0, Math.min(newTop, maxTop));
+
+            // Применяем позицию (используем left и top, убираем right)
+            draggedPanel.style.left = newLeft + 'px';
+            draggedPanel.style.top = newTop + 'px';
+            draggedPanel.style.right = 'auto';
+        }
+
+        /**
+         * Завершает перетаскивание панели
+         */
+        function stopDragPanel() {
+            draggedPanel = null;
+            document.removeEventListener('mousemove', dragPanel);
+            document.removeEventListener('mouseup', stopDragPanel);
         }
 
         /**
@@ -1365,6 +1641,22 @@ ex:jane a foaf:Person ;
                 node.style.cursor = 'pointer';
                 node.addEventListener('click', handleNodeClick);
             });
+        }
+
+        /**
+         * Обновляет описание режима визуализации
+         */
+        function updateModeDescription() {
+            const modeSelect = document.getElementById('visualization-mode');
+            const description = document.getElementById('mode-description');
+
+            if (!modeSelect || !description) return;
+
+            if (modeSelect.value === 'notation') {
+                description.textContent = 'С выделением типов объектов и предикатов цветом и формами';
+            } else {
+                description.textContent = 'Без специальных стилей (как в версии 1)';
+            }
         }
 
         // ============================================================================
@@ -1897,6 +2189,10 @@ ex:organizations {
             const inputFormat = document.getElementById('input-format').value;
             const outputFormat = document.getElementById('output-format').value;
             const layoutEngine = document.getElementById('layout-engine').value;
+            const visualizationMode = document.getElementById('visualization-mode').value;
+
+            // Сохраняем текущий режим визуализации
+            currentMode = visualizationMode;
 
             // Проверяем, что данные введены
             if (!rdfInput) {
@@ -1998,8 +2294,13 @@ ex:organizations {
                     document.getElementById('zoom-controls').style.display = 'flex';
                 }
 
-                // Отображаем легенду стилей
-                displayLegend();
+                // Отображаем легенду стилей (только в режиме нотации)
+                if (currentMode === 'notation') {
+                    displayLegend();
+                } else {
+                    // Скрываем легенду в базовом режиме
+                    document.getElementById('legend-panel').style.display = 'none';
+                }
 
                 // Отображаем панель префиксов
                 displayPrefixes(prefixes);
@@ -2007,8 +2308,8 @@ ex:organizations {
                 // Добавляем обработчики кликов на узлы графа
                 addNodeClickHandlers();
 
-                // Закрываем панель свойств от предыдущей визуализации
-                closePropertiesPanel();
+                // Закрываем все панели свойств от предыдущей визуализации
+                closeAllPropertiesPanels();
 
                 // Выводим статистику
                 console.log(`Обработано ${quads.length} триплетов`);
@@ -2289,6 +2590,15 @@ ex:organizations {
             console.log('RDF Grapher ver2 загружен');
             console.log('Используемые библиотеки: N3.js, Viz.js');
             console.log('Настроенные стили:', StyleName);
+            console.log('Режим по умолчанию:', Mode);
+
+            // Устанавливаем режим визуализации по умолчанию из константы Mode
+            const modeSelect = document.getElementById('visualization-mode');
+            if (modeSelect) {
+                modeSelect.value = Mode;
+                currentMode = Mode;
+                updateModeDescription();
+            }
 
             // Парсим URL параметры
             const params = parseUrlParams();
