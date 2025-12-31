@@ -665,6 +665,82 @@
             stroke-width: 3;
             stroke: #FF5722;
         }
+
+        /* Панель фильтров */
+        .filter-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #fff8e1;
+            border: 1px solid #ffcc02;
+            border-radius: 8px;
+        }
+
+        .filter-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .filter-controls button {
+            padding: 6px 12px;
+            font-size: 12px;
+            margin-top: 0;
+            background-color: #FFA000;
+        }
+
+        .filter-controls button:hover {
+            background-color: #FF8F00;
+        }
+
+        .filter-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .filter-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .filter-item label {
+            margin: 0;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        /* Кликабельные строки в таблице SPARQL результатов */
+        .sparql-results-table tr.clickable {
+            cursor: pointer;
+        }
+
+        .sparql-results-table tr.clickable:hover {
+            background-color: #e3f2fd !important;
+        }
+
+        .sparql-results-table tr.highlighted {
+            background-color: #fff3e0 !important;
+            outline: 2px solid #FF5722;
+        }
     </style>
 </head>
 <body>
@@ -808,23 +884,6 @@ ex:jane a foaf:Person ;
 
         <!-- Кнопка визуализации -->
         <button id="visualize-btn" onclick="visualize()">Визуализировать</button>
-
-        <!-- SPARQL панель (скрыта по умолчанию) -->
-        <div class="sparql-panel" id="sparql-panel">
-            <h3>SPARQL запрос:</h3>
-            <textarea class="sparql-query-textarea" id="sparql-query" placeholder="Введите SPARQL запрос...">SELECT ?s ?p ?o
-WHERE {
-    ?s ?p ?o .
-}</textarea>
-            <div class="sparql-buttons">
-                <button onclick="executeSparqlQuery()">Выполнить запрос</button>
-                <button onclick="resetSparqlQuery()">Сбросить</button>
-            </div>
-            <div class="sparql-results" id="sparql-results" style="display: none;">
-                <h4>Результаты запроса:</h4>
-                <div id="sparql-results-content"></div>
-            </div>
-        </div>
     </div>
 
     <!-- Контейнер для результата -->
@@ -860,6 +919,31 @@ WHERE {
         <div class="prefixes-panel" id="prefixes-panel" style="display: none;">
             <h3>Prefixes:</h3>
             <div class="prefixes-content" id="prefixes-content"></div>
+        </div>
+        <!-- SPARQL панель (скрыта по умолчанию) -->
+        <div class="sparql-panel" id="sparql-panel">
+            <h3>SPARQL запрос:</h3>
+            <textarea class="sparql-query-textarea" id="sparql-query" placeholder="Введите SPARQL запрос...">SELECT ?s ?p ?o
+WHERE {
+    ?s ?p ?o .
+}</textarea>
+            <div class="sparql-buttons">
+                <button onclick="executeSparqlQuery()">Выполнить запрос</button>
+                <button onclick="resetSparqlQuery()">Сбросить</button>
+            </div>
+            <div class="sparql-results" id="sparql-results" style="display: none;">
+                <h4>Результаты запроса:</h4>
+                <div id="sparql-results-content"></div>
+            </div>
+        </div>
+        <!-- Панель фильтров (только для режима нотации) -->
+        <div class="filter-panel" id="filter-panel" style="display: none;">
+            <h3>Фильтры типов:</h3>
+            <div class="filter-controls">
+                <button onclick="selectAllFilters()">Выделить все</button>
+                <button onclick="deselectAllFilters()">Снять все</button>
+            </div>
+            <div class="filter-content" id="filter-content"></div>
         </div>
     </div>
 
@@ -922,6 +1006,31 @@ WHERE {
          * - 'notation' - Режим нотации с выделением типов объектов и предикатов (по умолчанию)
          */
         const Mode = 'notation';
+
+        // ============================================================================
+        // КОНФИГУРАЦИЯ ФИЛЬТРОВ (Filter)
+        // ============================================================================
+
+        /**
+         * Filter - Конфигурация фильтров для режима нотации
+         *
+         * Фильтры позволяют скрывать определенные типы предикатов на схеме.
+         * Скрытые предикаты не отображаются в графе, но:
+         * - Окно свойств показывает полный набор свойств
+         * - SPARQL запросы обрабатывают все параметры
+         *
+         * hiddenPredicates - массив предикатов, скрытых по умолчанию
+         * Предикаты указываются в формате prefixed name или полного URI
+         */
+        const Filter = {
+            // Предикаты, скрытые по умолчанию
+            hiddenPredicates: [
+                'rdf:type',
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                'rdfs:subClassOf',
+                'http://www.w3.org/2000/01/rdf-schema#subClassOf'
+            ]
+        };
 
         // ============================================================================
         // КОНФИГУРАЦИЯ СТИЛЕЙ (StyleName)
@@ -1224,6 +1333,13 @@ WHERE {
 WHERE {
     ?s ?p ?o .
 }`;
+
+        // Текущие активные фильтры (предикаты, которые скрыты)
+        // Инициализируется из Filter.hiddenPredicates
+        let activeFilters = [...Filter.hiddenPredicates];
+
+        // Все уникальные предикаты в текущих данных (для отображения фильтров)
+        let allPredicates = [];
 
         // ============================================================================
         // ФУНКЦИИ РАБОТЫ СО СТИЛЯМИ
@@ -1984,8 +2100,19 @@ WHERE {
 
             // Тело таблицы
             html += '<tbody>';
-            bindings.forEach(binding => {
-                html += '<tr>';
+            bindings.forEach((binding, rowIndex) => {
+                // Собираем URI из всех значений строки для поиска узлов
+                const rowUris = [];
+                variables.forEach(v => {
+                    const term = binding.get(v);
+                    if (term && term.termType !== 'Literal') {
+                        rowUris.push(term.value);
+                    }
+                });
+                // Используем base64 кодирование для безопасной передачи JSON в атрибуте
+                const urisData = btoa(encodeURIComponent(JSON.stringify(rowUris)));
+
+                html += `<tr class="clickable" data-row-index="${rowIndex}" data-uris="${urisData}" onclick="highlightNodeFromSparqlResult(this)">`;
                 variables.forEach(v => {
                     const term = binding.get(v);
                     if (term) {
@@ -2007,6 +2134,76 @@ WHERE {
 
             sparqlResultsContent.innerHTML = html;
             sparqlResults.style.display = 'block';
+        }
+
+        /**
+         * Подсвечивает узел на графе при клике на строку в результатах SPARQL
+         *
+         * @param {HTMLElement} rowElement - Элемент строки таблицы
+         */
+        function highlightNodeFromSparqlResult(rowElement) {
+            // Снимаем подсветку со всех строк
+            const allRows = document.querySelectorAll('.sparql-results-table tr.highlighted');
+            allRows.forEach(row => row.classList.remove('highlighted'));
+
+            // Подсвечиваем текущую строку
+            rowElement.classList.add('highlighted');
+
+            // Получаем URI из данных строки (base64 закодированный JSON)
+            const urisData = rowElement.getAttribute('data-uris');
+            if (!urisData) return;
+
+            let uris;
+            try {
+                // Декодируем base64 и затем URL-декодируем
+                uris = JSON.parse(decodeURIComponent(atob(urisData)));
+            } catch (e) {
+                console.error('Ошибка парсинга URI:', e);
+                return;
+            }
+
+            if (uris.length === 0) return;
+
+            // Снимаем выделение с предыдущего узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+
+            // Ищем узлы на графе по URI
+            const output = document.getElementById('output');
+            const svg = output ? output.querySelector('svg') : null;
+            if (!svg) return;
+
+            const nodes = svg.querySelectorAll('.node');
+            let foundNode = null;
+
+            // Пробуем найти узел для первого URI
+            for (const uri of uris) {
+                for (const [label, info] of Object.entries(nodeLabelToUri)) {
+                    if (info.uri === uri) {
+                        // Нашли маппинг, ищем узел по dotId
+                        for (const node of nodes) {
+                            const titleElement = node.querySelector('title');
+                            if (titleElement && titleElement.textContent === info.dotId) {
+                                foundNode = node;
+                                break;
+                            }
+                        }
+                        if (foundNode) break;
+                    }
+                }
+                if (foundNode) break;
+            }
+
+            if (foundNode) {
+                // Выделяем найденный узел
+                foundNode.classList.add('selected');
+                selectedNodeElement = foundNode;
+
+                // Прокручиваем к узлу
+                foundNode.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
         }
 
         /**
@@ -2032,6 +2229,188 @@ WHERE {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ФИЛЬТРАЦИИ
+        // ============================================================================
+
+        /**
+         * Собирает все уникальные предикаты из текущих данных
+         *
+         * @returns {Array} - Массив объектов {uri, label} для каждого уникального предиката
+         */
+        function collectAllPredicates() {
+            const predicatesSet = new Set();
+            const predicatesMap = new Map();
+
+            currentQuads.forEach(quad => {
+                const predicateUri = quad.predicate.value;
+                if (!predicatesSet.has(predicateUri)) {
+                    predicatesSet.add(predicateUri);
+                    const predicateLabel = getPrefixedName(predicateUri, currentPrefixes);
+                    predicatesMap.set(predicateUri, {
+                        uri: predicateUri,
+                        label: predicateLabel
+                    });
+                }
+            });
+
+            // Сортируем по label
+            const predicates = Array.from(predicatesMap.values());
+            predicates.sort((a, b) => a.label.localeCompare(b.label));
+
+            return predicates;
+        }
+
+        /**
+         * Проверяет, скрыт ли предикат по активным фильтрам
+         *
+         * @param {string} predicateUri - URI предиката
+         * @param {string} predicateLabel - Prefixed name предиката
+         * @returns {boolean} - true если предикат скрыт
+         */
+        function isPredicateHidden(predicateUri, predicateLabel) {
+            return activeFilters.includes(predicateUri) || activeFilters.includes(predicateLabel);
+        }
+
+        /**
+         * Отображает панель фильтров с чекбоксами для каждого предиката
+         */
+        function displayFilters() {
+            const filterPanel = document.getElementById('filter-panel');
+            const filterContent = document.getElementById('filter-content');
+
+            // Показываем панель только в режиме нотации
+            if (currentMode !== 'notation') {
+                filterPanel.style.display = 'none';
+                return;
+            }
+
+            // Собираем все уникальные предикаты
+            allPredicates = collectAllPredicates();
+
+            if (allPredicates.length === 0) {
+                filterPanel.style.display = 'none';
+                return;
+            }
+
+            // Формируем HTML для чекбоксов
+            let html = '';
+            allPredicates.forEach((predicate, index) => {
+                const isChecked = !isPredicateHidden(predicate.uri, predicate.label);
+                const checkboxId = 'filter-checkbox-' + index;
+
+                html += `<div class="filter-item">`;
+                html += `<input type="checkbox" id="${checkboxId}" ${isChecked ? 'checked' : ''} `;
+                html += `onchange="toggleFilter('${escapeHtml(predicate.uri)}', '${escapeHtml(predicate.label)}', this.checked)">`;
+                html += `<label for="${checkboxId}">${escapeHtml(predicate.label)}</label>`;
+                html += `</div>`;
+            });
+
+            filterContent.innerHTML = html;
+            filterPanel.style.display = 'block';
+        }
+
+        /**
+         * Переключает состояние фильтра для предиката
+         *
+         * @param {string} predicateUri - URI предиката
+         * @param {string} predicateLabel - Prefixed name предиката
+         * @param {boolean} isVisible - true если предикат должен быть видимым
+         */
+        function toggleFilter(predicateUri, predicateLabel, isVisible) {
+            if (isVisible) {
+                // Убираем из фильтров (делаем видимым)
+                activeFilters = activeFilters.filter(f => f !== predicateUri && f !== predicateLabel);
+            } else {
+                // Добавляем в фильтры (скрываем)
+                if (!activeFilters.includes(predicateUri)) {
+                    activeFilters.push(predicateUri);
+                }
+                if (!activeFilters.includes(predicateLabel)) {
+                    activeFilters.push(predicateLabel);
+                }
+            }
+
+            // Перевизуализируем граф
+            reVisualizeWithFilters();
+        }
+
+        /**
+         * Выделяет все предикаты (делает видимыми)
+         */
+        function selectAllFilters() {
+            activeFilters = [];
+
+            // Обновляем чекбоксы
+            const checkboxes = document.querySelectorAll('#filter-content input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = true);
+
+            // Перевизуализируем граф
+            reVisualizeWithFilters();
+        }
+
+        /**
+         * Снимает выделение со всех предикатов (скрывает все)
+         */
+        function deselectAllFilters() {
+            // Скрываем все предикаты
+            activeFilters = [];
+            allPredicates.forEach(predicate => {
+                activeFilters.push(predicate.uri);
+                activeFilters.push(predicate.label);
+            });
+
+            // Обновляем чекбоксы
+            const checkboxes = document.querySelectorAll('#filter-content input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = false);
+
+            // Перевизуализируем граф
+            reVisualizeWithFilters();
+        }
+
+        /**
+         * Перевизуализирует граф с учетом текущих фильтров
+         * Не пересобирает данные, только перестраивает DOT-код и рендерит
+         */
+        async function reVisualizeWithFilters() {
+            if (currentQuads.length === 0) {
+                return;
+            }
+
+            try {
+                // Фильтруем триплеты для визуализации (но сохраняем оригинальные currentQuads)
+                const filteredQuads = currentQuads.filter(quad => {
+                    const predicateUri = quad.predicate.value;
+                    const predicateLabel = getPrefixedName(predicateUri, currentPrefixes);
+                    return !isPredicateHidden(predicateUri, predicateLabel);
+                });
+
+                // Генерируем DOT-код из отфильтрованных триплетов
+                const dotCode = rdfToDot(filteredQuads, currentPrefixes);
+
+                // Получаем движок компоновки
+                const layoutEngine = document.getElementById('layout-engine').value;
+
+                // Рендерим граф с помощью Viz.js
+                const viz = await Viz.instance();
+                const svgString = viz.renderString(dotCode, {
+                    format: 'svg',
+                    engine: layoutEngine
+                });
+
+                // Отображаем результат
+                const output = document.getElementById('output');
+                output.innerHTML = svgString;
+                currentSvgElement = output.querySelector('svg');
+
+                // Добавляем обработчики кликов на узлы графа
+                addNodeClickHandlers();
+
+            } catch (error) {
+                console.error('Ошибка при перевизуализации:', error);
+            }
         }
 
         // ============================================================================
@@ -2415,6 +2794,7 @@ ex:organizations {
             document.getElementById('zoom-controls').style.display = 'none';
             document.getElementById('prefixes-panel').style.display = 'none';
             document.getElementById('legend-panel').style.display = 'none';
+            document.getElementById('filter-panel').style.display = 'none';
         }
 
         /**
@@ -2434,6 +2814,7 @@ ex:organizations {
             document.getElementById('zoom-controls').style.display = 'none';
             document.getElementById('prefixes-panel').style.display = 'none';
             document.getElementById('legend-panel').style.display = 'none';
+            document.getElementById('filter-panel').style.display = 'none';
         }
 
         /**
@@ -2626,8 +3007,18 @@ ex:organizations {
                     return;
                 }
 
-                // Шаг 2: Генерация DOT-кода из RDF триплетов с применением стилей
-                const dotCode = rdfToDot(quads, prefixes);
+                // Сбрасываем фильтры на значения по умолчанию при новой визуализации
+                activeFilters = [...Filter.hiddenPredicates];
+
+                // Фильтруем триплеты для визуализации (но сохраняем оригинальные currentQuads)
+                const filteredQuads = quads.filter(quad => {
+                    const predicateUri = quad.predicate.value;
+                    const predicateLabel = getPrefixedName(predicateUri, prefixes);
+                    return !isPredicateHidden(predicateUri, predicateLabel);
+                });
+
+                // Шаг 2: Генерация DOT-кода из отфильтрованных RDF триплетов с применением стилей
+                const dotCode = rdfToDot(filteredQuads, prefixes);
 
                 // Выводим DOT-код в консоль для отладки
                 console.log('Сгенерированный DOT-код:', dotCode);
@@ -2682,6 +3073,9 @@ ex:organizations {
 
                 // Отображаем панель префиксов
                 displayPrefixes(prefixes);
+
+                // Отображаем панель фильтров (только в режиме нотации)
+                displayFilters();
 
                 // Добавляем обработчики кликов на узлы графа
                 addNodeClickHandlers();
