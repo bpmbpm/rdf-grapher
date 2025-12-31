@@ -1331,6 +1331,88 @@ WHERE {
             }
         };
 
+        /**
+         * AggregationNodeStyles - Стили узлов для режима агрегации
+         *
+         * В режиме агрегации все узлы отображаются как эллипсы.
+         * Тип объекта определяется цветом заливки и толщиной/цветом контура.
+         * Используются единые edgeStyles из StyleName.
+         *
+         * ВАЖНО: Эти стили используются только в режиме агрегации.
+         * Форма всегда ellipse, без таблиц внутри, только текст строками.
+         */
+        const AggregationNodeStyles = {
+            // ====================================================================
+            // Стиль для типа foaf:Person (люди) - эллипс с красным контуром
+            // ====================================================================
+            'PersonStyle': {
+                types: ['foaf:Person', 'schema:Person', 'http://xmlns.com/foaf/0.1/Person'],
+                // shape="ellipse" - всегда эллипс в режиме агрегации
+                // color="Red" - красный цвет контура
+                // penwidth="2" - толстый контур для выделения типа
+                // fillcolor="#FFEBEE" - светло-красная заливка
+                dot: 'shape="ellipse" color="Red" penwidth="2" fillcolor="#FFEBEE" fontname="Arial" fontsize="10" style="filled"',
+                label: 'Люди (foaf:Person)',
+                description: 'Объекты типа foaf:Person (режим агрегации)'
+            },
+
+            // ====================================================================
+            // Стиль для типа foaf:Organization (организации) - эллипс с синим контуром
+            // ====================================================================
+            'OrganizationStyle': {
+                types: ['foaf:Organization', 'schema:Organization', 'http://xmlns.com/foaf/0.1/Organization'],
+                // shape="ellipse" - всегда эллипс
+                // color="Blue" - синий цвет контура
+                // penwidth="3" - более толстый контур
+                // fillcolor="#E3F2FD" - светло-голубая заливка
+                dot: 'shape="ellipse" color="Blue" penwidth="3" fillcolor="#E3F2FD" fontname="Arial" fontsize="10" style="filled"',
+                label: 'Организации (foaf:Organization)',
+                description: 'Объекты типа foaf:Organization (режим агрегации)'
+            },
+
+            // ====================================================================
+            // Стиль для типа foaf:Document (документы) - эллипс с зеленым контуром
+            // ====================================================================
+            'DocumentStyle': {
+                types: ['foaf:Document', 'schema:Document', 'http://xmlns.com/foaf/0.1/Document'],
+                // shape="ellipse" - всегда эллипс
+                // color="Green" - зеленый цвет контура
+                // penwidth="2" - толстый контур
+                // fillcolor="#E8F5E9" - светло-зеленая заливка
+                dot: 'shape="ellipse" color="Green" penwidth="2" fillcolor="#E8F5E9" fontname="Arial" fontsize="10" style="filled"',
+                label: 'Документы (foaf:Document)',
+                description: 'Объекты типа foaf:Document (режим агрегации)'
+            },
+
+            // ====================================================================
+            // Стиль для пустых узлов (blank nodes) - эллипс с серым контуром
+            // ====================================================================
+            'BlankNodeStyle': {
+                types: ['_BlankNode'],
+                // shape="ellipse" - эллипс
+                // color="#999999" - серый цвет контура
+                // style="filled,dashed" - пунктирная граница
+                // fillcolor="#E0E0E0" - светло-серая заливка
+                dot: 'shape="ellipse" color="#999999" penwidth="1" fillcolor="#E0E0E0" fontname="Arial" fontsize="9" style="filled,dashed"',
+                label: 'Пустые узлы (BlankNode)',
+                description: 'Анонимные узлы без URI (режим агрегации)'
+            },
+
+            // ====================================================================
+            // Стиль по умолчанию для всех остальных узлов - эллипс
+            // ====================================================================
+            'default': {
+                types: [],
+                // shape="ellipse" - всегда эллипс
+                // color="#1976D2" - синий цвет контура
+                // penwidth="1" - обычный контур
+                // fillcolor="#CCE5FF" - светло-голубая заливка
+                dot: 'shape="ellipse" color="#1976D2" penwidth="1" fillcolor="#CCE5FF" fontname="Arial" fontsize="10" style="filled"',
+                label: 'По умолчанию (URI)',
+                description: 'Все остальные URI-ресурсы (режим агрегации)'
+            }
+        };
+
         // ============================================================================
         // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
         // ============================================================================
@@ -1433,6 +1515,36 @@ WHERE {
                     return BaseStyles.blankNode;
                 }
                 return BaseStyles.uri;
+            }
+
+            // В режиме агрегации используем AggregationNodeStyles
+            // (форма всегда ellipse, тип определяется цветом заливки и контура)
+            if (currentMode === 'aggregation') {
+                // Специальная обработка blank nodes в режиме агрегации
+                if (isBlankNode) {
+                    return AggregationNodeStyles['BlankNodeStyle'].dot;
+                }
+
+                // Получаем типы узла из кэша
+                const nodeTypes = nodeTypesCache[nodeUri] || [];
+
+                // Ищем совпадение с определенными стилями агрегации
+                for (const [styleName, styleConfig] of Object.entries(AggregationNodeStyles)) {
+                    if (styleName === 'default') continue;  // Пропускаем стиль по умолчанию
+
+                    // Проверяем, есть ли совпадение типов
+                    for (const type of styleConfig.types) {
+                        if (type.startsWith('_')) continue;  // Пропускаем специальные маркеры
+
+                        // Проверяем совпадение типа
+                        if (nodeTypes.includes(type)) {
+                            return styleConfig.dot;
+                        }
+                    }
+                }
+
+                // Возвращаем стиль по умолчанию для режима агрегации
+                return AggregationNodeStyles['default'].dot;
             }
 
             // В режиме нотации используем полные стили
@@ -2724,7 +2836,9 @@ ex:organizations {
          */
         function rdfToDotAggregation(quads, prefixes = {}) {
             // Строим кэш типов для определения стилей узлов
-            buildNodeTypesCache(quads, prefixes);
+            // ВАЖНО: используем currentQuads (оригинальные данные), а не отфильтрованные quads,
+            // чтобы информация о типах сохранялась даже когда rdf:type скрыт в фильтрах
+            buildNodeTypesCache(currentQuads, prefixes);
 
             // Очищаем маппинг label -> URI
             nodeLabelToUri = {};
@@ -2811,45 +2925,73 @@ ex:organizations {
             // Настройки графа
             dot += '    // Настройки графа (режим агрегации)\n';
             dot += '    rankdir=LR;\n';
-            dot += '    node [fontname="Arial", shape="box"];\n';
+            // В режиме агрегации форма по умолчанию - ellipse (переопределяется стилями)
+            dot += '    node [fontname="Arial", shape="ellipse"];\n';
             dot += '    edge [fontname="Arial", fontsize=10];\n';
             dot += '\n';
 
             // ====================================================================
             // Добавляем узлы с агрегированными литералами
             // ====================================================================
-            dot += '    // Узлы графа с агрегированными литералами\n';
+            dot += '    // Узлы графа с агрегированными литералами (эллипс, текст строками)\n';
+
+            // Максимальное количество параметров для отображения
+            const MAX_PARAMS = 5;
 
             nodes.forEach((nodeInfo, value) => {
                 const literals = nodeLiterals.get(value) || [];
 
-                // Формируем HTML-like label для узла
-                let htmlLabel = '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">';
+                // Формируем простой текстовый label для эллипса
+                // Формат: строки с переносами (\n)
+                // Верхние строки - обычным шрифтом (name/label), нижние - мелким
 
-                // Первая строка - идентификатор узла (обычный шрифт)
-                htmlLabel += `<TR><TD BGCOLOR="#CCE5FF" COLSPAN="2"><B>${escapeHtmlLabel(nodeInfo.label)}</B></TD></TR>`;
+                // Сортируем литералы: сначала name/label (обычный шрифт), потом остальные (мелкий)
+                const nameLabelLiterals = literals.filter(l => l.isNameLabel);
+                const otherLiterals = literals.filter(l => !l.isNameLabel);
 
-                if (literals.length > 0) {
-                    // Сортируем литералы: сначала name/label (обычный шрифт), потом остальные (мелкий)
-                    const nameLabelLiterals = literals.filter(l => l.isNameLabel);
-                    const otherLiterals = literals.filter(l => !l.isNameLabel);
+                // Собираем все строки для label
+                let labelLines = [];
 
-                    // Добавляем name/label литералы обычным шрифтом
-                    nameLabelLiterals.forEach(lit => {
-                        htmlLabel += `<TR><TD ALIGN="LEFT">${escapeHtmlLabel(lit.predicate)}</TD>`;
-                        htmlLabel += `<TD ALIGN="LEFT">${escapeHtmlLabel(lit.value)}</TD></TR>`;
-                    });
+                // Первая строка - идентификатор узла (всегда показываем)
+                labelLines.push(escapeHtmlLabel(nodeInfo.label));
 
-                    // Добавляем остальные литералы мелким шрифтом
-                    otherLiterals.forEach(lit => {
-                        htmlLabel += `<TR><TD ALIGN="LEFT"><FONT POINT-SIZE="8">${escapeHtmlLabel(lit.predicate)}</FONT></TD>`;
-                        htmlLabel += `<TD ALIGN="LEFT"><FONT POINT-SIZE="8">${escapeHtmlLabel(lit.value)}</FONT></TD></TR>`;
-                    });
+                // Добавляем name/label литералы (обычный шрифт)
+                nameLabelLiterals.forEach(lit => {
+                    if (labelLines.length < MAX_PARAMS) {
+                        labelLines.push(escapeHtmlLabel(lit.value));
+                    }
+                });
+
+                // Добавляем остальные литералы (мелкий шрифт через FONT тег)
+                otherLiterals.forEach(lit => {
+                    if (labelLines.length < MAX_PARAMS) {
+                        // Формат: "predicate: value" для остальных литералов
+                        labelLines.push(escapeHtmlLabel(lit.predicate) + ': ' + escapeHtmlLabel(lit.value));
+                    }
+                });
+
+                // Формируем HTML-like label для простого многострочного текста в эллипсе
+                // Используем <BR/> для переноса строк и FONT для разных размеров
+                let htmlLabel = '<';
+
+                // Первая строка (идентификатор) - жирным обычным шрифтом
+                htmlLabel += `<B>${labelLines[0]}</B>`;
+
+                // Остальные строки
+                for (let i = 1; i < labelLines.length; i++) {
+                    htmlLabel += '<BR/>';
+                    // name/label литералы (индексы 1..nameLabelLiterals.length) - обычный шрифт
+                    if (i <= nameLabelLiterals.length) {
+                        htmlLabel += labelLines[i];
+                    } else {
+                        // Остальные литералы - мелкий шрифт
+                        htmlLabel += `<FONT POINT-SIZE="8">${labelLines[i]}</FONT>`;
+                    }
                 }
 
-                htmlLabel += '</TABLE>>';
+                htmlLabel += '>';
 
-                // Получаем стиль для узла
+                // Получаем стиль для узла (всегда эллипс в режиме агрегации)
                 const nodeStyle = getNodeStyle(nodeInfo.value, false, nodeInfo.isBlank);
 
                 // Формируем определение узла с HTML-like label
@@ -2880,7 +3022,9 @@ ex:organizations {
             }
 
             // Строим кэш типов для определения стилей узлов
-            buildNodeTypesCache(quads, prefixes);
+            // ВАЖНО: используем currentQuads (оригинальные данные), а не отфильтрованные quads,
+            // чтобы информация о типах сохранялась даже когда rdf:type скрыт в фильтрах
+            buildNodeTypesCache(currentQuads, prefixes);
 
             // Очищаем маппинг label -> URI
             nodeLabelToUri = {};
@@ -3102,11 +3246,15 @@ ex:organizations {
 
             // ====================================================================
             // Секция стилей узлов
+            // В режиме агрегации используем AggregationNodeStyles
             // ====================================================================
             html += '<div class="legend-section">';
             html += '<h4>Стили узлов (Node Styles)</h4>';
 
-            for (const [styleName, styleConfig] of Object.entries(StyleName.nodeStyles)) {
+            // Выбираем источник стилей в зависимости от режима
+            const nodeStylesSource = currentMode === 'aggregation' ? AggregationNodeStyles : StyleName.nodeStyles;
+
+            for (const [styleName, styleConfig] of Object.entries(nodeStylesSource)) {
                 // Извлекаем цвета из DOT-строки для визуализации
                 const fillColorMatch = styleConfig.dot.match(/fillcolor="([^"]+)"/);
                 const borderColorMatch = styleConfig.dot.match(/color="([^"]+)"/);

@@ -8,19 +8,63 @@
     <h1>Test Aggregation Mode</h1>
     <p>This page tests the aggregation mode implementation by loading the ver3/index.html in an iframe.</p>
 
-    <h2>Test Case: Load example RDF and switch to Aggregation mode</h2>
+    <h2>Test Case 1: Basic Aggregation Mode</h2>
     <ol>
         <li>Click "Turtle" to load example data</li>
         <li>Select "Режим агрегации" from the dropdown</li>
         <li>Click "Визуализировать"</li>
         <li>Verify that:
             <ul>
-                <li>Literals (like "John Doe", "30") are shown inside the node boxes</li>
-                <li>Name/label predicates have normal font size</li>
-                <li>Other literal predicates have smaller font size</li>
-                <li>rdf:type and rdfs:subClassOf predicates are hidden by default</li>
+                <li>All nodes are ellipses (not boxes or other shapes)</li>
+                <li>Node identifiers are shown in bold at the top</li>
+                <li>Name/label values are shown in normal font</li>
+                <li>Other literal parameters are shown in smaller font with format "predicate: value"</li>
+                <li>Maximum 5 lines are displayed per node</li>
+                <li>rdf:type and rdfs:subClassOf predicates are hidden by default in filters</li>
             </ul>
         </li>
+    </ol>
+
+    <h2>Test Case 2: rdf:type Toggle (Issue #27 Main Test)</h2>
+    <ol>
+        <li>After Test Case 1, find the "Фильтры типов" (Type Filters) panel</li>
+        <li>Toggle the rdf:type checkbox (enable/disable visibility)</li>
+        <li><strong>IMPORTANT:</strong> Verify that:
+            <ul>
+                <li>Node styles are <strong>preserved</strong> after toggling rdf:type</li>
+                <li>foaf:Person nodes remain with red border (PersonStyle)</li>
+                <li>foaf:Organization nodes remain with blue border (OrganizationStyle)</li>
+                <li>Nodes do NOT reset to default dot style</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h2>Test Case 3: Notation Mode rdf:type Toggle</h2>
+    <ol>
+        <li>Select "Режим нотации" from the dropdown</li>
+        <li>Click "Визуализировать"</li>
+        <li>Toggle the rdf:type checkbox</li>
+        <li>Verify that node styles are preserved (octagon for Person, box for Organization)</li>
+    </ol>
+
+    <h2>Test Case 4: Aggregation Mode Node Style Colors</h2>
+    <ol>
+        <li>Switch to "Режим агрегации"</li>
+        <li>Click "Визуализировать"</li>
+        <li>Verify that:
+            <ul>
+                <li>foaf:Person nodes have light red fill (#FFEBEE) and red border (penwidth=2)</li>
+                <li>foaf:Organization nodes have light blue fill (#E3F2FD) and blue border (penwidth=3)</li>
+                <li>Default nodes have light blue fill (#CCE5FF) and blue border</li>
+                <li>All nodes are ellipse shape (not boxes)</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h2>Test Case 5: Legend in Aggregation Mode</h2>
+    <ol>
+        <li>In "Режим агрегации", check the Legend panel</li>
+        <li>Verify that legend shows AggregationNodeStyles (all ellipses) instead of regular nodeStyles</li>
     </ol>
 
     <iframe src="../ver3/index.html" width="100%" height="800px" style="border: 1px solid #ccc;"></iframe>
