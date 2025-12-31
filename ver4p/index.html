@@ -741,7 +741,9 @@
             <strong>Загрузить пример RDF данных:</strong>
             <span class="example-link" onclick="loadExampleTurtle()">Turtle</span> |
             <span class="example-link" onclick="loadExampleVAD()">Turtle VAD</span> |
-            <span class="example-link" onclick="loadExampleNTriples()">N-Triples</span>
+            <span class="example-link" onclick="loadExampleNTriples()">N-Triples</span> |
+            <span class="example-link" onclick="loadExampleNQuads()">N-Quads</span> |
+            <span class="example-link" onclick="loadExampleTriG()">TriG</span>
         </p>
     </div>
 
@@ -1897,6 +1899,69 @@ vad:Executor4 rdf:type vad:Executor ;
             updateModeDescription();
         }
 
+        /**
+         * Загружает пример RDF данных в формате N-Quads
+         */
+        function loadExampleNQuads() {
+            const exampleRdf = `# Пример RDF данных в формате N-Quads
+# Формат: субъект предикат объект граф .
+# N-Quads расширяет N-Triples добавлением именованных графов
+<http://example.org/john> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> <http://example.org/people> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/name> "John Doe" <http://example.org/people> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/knows> <http://example.org/jane> <http://example.org/people> .
+<http://example.org/jane> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> <http://example.org/people> .
+<http://example.org/jane> <http://xmlns.com/foaf/0.1/name> "Jane Smith" <http://example.org/people> .
+<http://example.org/company> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Organization> <http://example.org/organizations> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/name> "Example Corp" <http://example.org/organizations> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/member> <http://example.org/john> <http://example.org/organizations> .`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'n-quads';
+            document.getElementById('visualization-mode').value = 'notation';
+            updateModeDescription();
+        }
+
+        /**
+         * Загружает пример RDF данных в формате TriG
+         */
+        function loadExampleTriG() {
+            const exampleRdf = `# Пример RDF данных в формате TriG
+# TriG расширяет Turtle добавлением именованных графов
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# Граф с информацией о людях
+ex:people {
+    ex:john rdf:type foaf:Person ;
+        foaf:name "John Doe" ;
+        foaf:knows ex:jane .
+
+    ex:jane rdf:type foaf:Person ;
+        foaf:name "Jane Smith" ;
+        foaf:knows ex:john .
+}
+
+# Граф с информацией об организациях
+ex:organizations {
+    ex:company rdf:type foaf:Organization ;
+        foaf:name "Example Corp" ;
+        foaf:member ex:john, ex:jane .
+}`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'trig';
+            document.getElementById('visualization-mode').value = 'notation';
+            updateModeDescription();
+        }
+
+        /**
+         * Для обратной совместимости: вызывает загрузку примера Turtle
+         */
+        function loadExample() {
+            loadExampleTurtle();
+        }
+
         // ============================================================================
         // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С URI
         // ============================================================================
@@ -1944,6 +2009,17 @@ vad:Executor4 rdf:type vad:Executor ;
 
         function escapeHtmlLabel(str) {
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        /**
+         * Экранирует HTML символы для безопасного отображения
+         * @param {string} text - Исходный текст
+         * @returns {string} - Экранированный текст
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         function wrapTextByWords(text, maxLength) {
@@ -2103,6 +2179,7 @@ vad:Executor4 rdf:type vad:Executor ;
             let dot = 'digraph VADGraph {\n';
             dot += '    // VAD (Value Added Chain Diagram)\n';
             dot += '    rankdir=LR;\n';
+            dot += '    forcelabels=true;\n';  // Обеспечивает отображение xlabel
             dot += '    node [fontname="Arial"];\n';
             dot += '    edge [fontname="Arial", fontsize=10];\n';
             dot += '    splines=ortho;\n';  // Ортогональные линии для VAD
@@ -2128,7 +2205,7 @@ vad:Executor4 rdf:type vad:Executor ;
                 const nodeId = generateNodeId(uri);
                 const processName = processInfo.name || processInfo.label;
 
-                // Получаем список исполнителей для подписи
+                // Получаем список исполнителей для подписи под узлом
                 let executorsList = '';
                 if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
                     const group = executorGroups.get(processInfo.executorGroup);
@@ -2138,17 +2215,19 @@ vad:Executor4 rdf:type vad:Executor ;
                     executorsList = executorNamesList.join(', ');
                 }
 
-                // Формируем HTML-like label: имя процесса + подпись с исполнителями
-                let htmlLabel = '<';
-                htmlLabel += `<B>${escapeHtmlLabel(processName)}</B>`;
-                if (executorsList) {
-                    htmlLabel += '<BR/>';
-                    htmlLabel += `<FONT POINT-SIZE="8">${escapeHtmlLabel(executorsList)}</FONT>`;
-                }
-                htmlLabel += '>';
+                // Формируем HTML-like label: только имя процесса (исполнители выносятся в xlabel)
+                const htmlLabel = `<<B>${escapeHtmlLabel(processName)}</B>>`;
 
                 // cds shape с зеленой заливкой
-                const nodeStyle = 'shape="cds" height="0.9" width="2.0" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"';
+                let nodeStyle = 'shape="cds" height="0.9" width="2.0" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"';
+
+                // Если есть исполнители, добавляем их как xlabel (внешняя подпись под узлом)
+                // Применяем перенос строки при длинных подписях
+                if (executorsList) {
+                    const wrappedLines = wrapTextByWords(executorsList, currentMaxLabelLength);
+                    const wrappedExecutors = wrappedLines.join('\\n');
+                    nodeStyle += ` xlabel="${escapeDotString(wrappedExecutors)}" fontsize="9" forcelabels="true"`;
+                }
 
                 dot += `    ${nodeId} [label=${htmlLabel} ${nodeStyle}];\n`;
                 nodeLabelToUri[processInfo.label] = { uri: uri, dotId: nodeId };
@@ -2859,22 +2938,35 @@ vad:Executor4 rdf:type vad:Executor ;
                 html += '</tr></thead>';
                 html += '<tbody>';
 
+                let rowIndex = 0;
                 bindings.forEach(binding => {
-                    html += '<tr>';
+                    // Собираем URI из этой строки для навигации к узлу
+                    const uris = [];
+                    variables.forEach(v => {
+                        const term = binding.get(v);
+                        if (term && term.termType !== 'Literal') {
+                            uris.push(term.value);
+                        }
+                    });
+
+                    // Кодируем URI в base64 для передачи через data-атрибут
+                    const urisData = btoa(encodeURIComponent(JSON.stringify(uris)));
+
+                    html += `<tr class="clickable" data-row-index="${rowIndex}" data-uris="${urisData}" onclick="highlightNodeFromSparqlResult(this)">`;
                     variables.forEach(v => {
                         const term = binding.get(v);
                         if (term) {
-                            if (term.termType === 'Literal') {
-                                html += `<td class="literal">"${term.value}"</td>`;
-                            } else {
-                                const prefixedName = getPrefixedName(term.value, currentPrefixes);
-                                html += `<td class="uri">${prefixedName}</td>`;
-                            }
+                            const value = term.value;
+                            const isLiteral = term.termType === 'Literal';
+                            const displayValue = isLiteral ? `"${value}"` : getPrefixedName(value, currentPrefixes);
+                            const cssClass = isLiteral ? 'literal' : 'uri';
+                            html += `<td class="${cssClass}">${escapeHtml(displayValue)}</td>`;
                         } else {
                             html += '<td>-</td>';
                         }
                     });
                     html += '</tr>';
+                    rowIndex++;
                 });
 
                 html += '</tbody></table>';
@@ -2885,6 +2977,92 @@ vad:Executor4 rdf:type vad:Executor ;
             } catch (error) {
                 console.error('Ошибка SPARQL:', error);
                 resultsContent.innerHTML = `<div class="sparql-error">Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        /**
+         * Подсвечивает узел на графе при клике на строку в результатах SPARQL
+         * и открывает панель свойств для первого найденного URI
+         *
+         * @param {HTMLElement} rowElement - Элемент строки таблицы
+         */
+        function highlightNodeFromSparqlResult(rowElement) {
+            // Снимаем подсветку со всех строк
+            const allRows = document.querySelectorAll('.sparql-results-table tr.highlighted');
+            allRows.forEach(row => row.classList.remove('highlighted'));
+
+            // Подсвечиваем текущую строку
+            rowElement.classList.add('highlighted');
+
+            // Получаем URI из данных строки (base64 закодированный JSON)
+            const urisData = rowElement.getAttribute('data-uris');
+            if (!urisData) return;
+
+            let uris;
+            try {
+                // Декодируем base64 и затем URL-декодируем
+                uris = JSON.parse(decodeURIComponent(atob(urisData)));
+            } catch (e) {
+                console.error('Ошибка парсинга URI:', e);
+                return;
+            }
+
+            if (uris.length === 0) return;
+
+            // Снимаем выделение с предыдущего узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+
+            // Ищем узлы на графе по URI
+            const output = document.getElementById('output');
+            const svg = output ? output.querySelector('svg') : null;
+            if (!svg) return;
+
+            const nodes = svg.querySelectorAll('.node');
+            let foundNode = null;
+            let foundUri = null;
+            let foundLabel = null;
+
+            // Пробуем найти узел для первого URI
+            for (const uri of uris) {
+                for (const [label, info] of Object.entries(nodeLabelToUri)) {
+                    if (info.uri === uri) {
+                        // Нашли маппинг, ищем узел по dotId
+                        for (const node of nodes) {
+                            const titleElement = node.querySelector('title');
+                            if (titleElement && titleElement.textContent === info.dotId) {
+                                foundNode = node;
+                                foundUri = uri;
+                                foundLabel = label;
+                                break;
+                            }
+                        }
+                        if (foundNode) break;
+                    }
+                }
+                if (foundNode) break;
+            }
+
+            if (foundNode) {
+                // Выделяем найденный узел
+                foundNode.classList.add('selected');
+                selectedNodeElement = foundNode;
+
+                // Прокручиваем к узлу
+                foundNode.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+
+                // Открываем панель свойств для найденного URI
+                if (foundUri) {
+                    const displayLabel = foundLabel || getPrefixedName(foundUri, currentPrefixes);
+                    showNodeProperties(foundUri, displayLabel);
+                }
+            } else if (uris.length > 0) {
+                // Если узел не найден на графе, все равно открываем панель свойств для первого URI
+                const uri = uris[0];
+                const displayLabel = getPrefixedName(uri, currentPrefixes);
+                showNodeProperties(uri, displayLabel);
             }
         }
 
