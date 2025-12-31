@@ -824,9 +824,11 @@ ex:jane a foaf:Person ;
                         Поддерживаемые выходные форматы:
                         - SVG - векторный формат, масштабируемый
                         - PNG - растровый формат для скачивания
+                        - Drawio - формат для diagrams.net (несжатый XML)
                     -->
                     <option value="svg" selected>SVG</option>
                     <option value="png">PNG</option>
+                    <option value="drawio">Drawio (несжатый)</option>
                 </select>
             </div>
 
@@ -912,6 +914,7 @@ ex:jane a foaf:Person ;
         <div class="export-buttons" id="export-buttons" style="display: none;">
             <button onclick="downloadSVG()">Скачать SVG</button>
             <button onclick="downloadPNG()">Скачать PNG</button>
+            <button onclick="downloadDrawio()">Скачать Drawio</button>
             <button onclick="openInNewWindowGitHub()">Показать в окне github</button>
             <button onclick="openInNewWindowLdfFi()">Показать в окне ldf.fi</button>
         </div>
@@ -1145,12 +1148,12 @@ WHERE {
                     // - shape="octagon" - восьмиугольник для отличия людей от других объектов
                     // - height/width="0.75" - фиксированный размер
                     // - fixedsize="true" - размер не изменяется в зависимости от текста
-                    // - color="Red" - красный цвет границы
-                    // - fillcolor="white" - белая заливка
+                    // - color="#9C27B0" - фиолетовый цвет границы (изменено с красного для отличия от цвета выделения)
+                    // - fillcolor="#F3E5F5" - светло-фиолетовая заливка
                     // - fontname="Arial" - шрифт Arial
                     // - fontsize="10" - размер шрифта 10pt
                     // - style="filled" - заливка включена
-                    dot: 'shape="octagon" height="0.75" width="0.75" fixedsize="true" color="Red" fillcolor="white" fontname="Arial" fontsize="10" style="filled"',
+                    dot: 'shape="octagon" height="0.75" width="0.75" fixedsize="true" color="#9C27B0" fillcolor="#F3E5F5" fontname="Arial" fontsize="10" style="filled"',
                     label: 'Люди (foaf:Person)',
                     description: 'Объекты типа foaf:Person или schema:Person'
                 },
@@ -1290,11 +1293,11 @@ WHERE {
                         'schema:member',
                         'http://xmlns.com/foaf/0.1/member'
                     ],
-                    // - color="#FF9800" - оранжевый цвет (организационные связи)
+                    // - color="#795548" - коричневый цвет (организационные связи, изменено с оранжевого для отличия от цвета выделения)
                     // - penwidth="2" - средняя толщина
                     // - style="solid" - сплошная линия
                     // - arrowhead="diamond" - ромбовидная стрелка
-                    dot: 'color="#FF9800" penwidth="2" style="solid" arrowhead="diamond"',
+                    dot: 'color="#795548" penwidth="2" style="solid" arrowhead="diamond"',
                     label: 'Член (foaf:member)',
                     description: 'Членство в организации'
                 },
@@ -1356,15 +1359,15 @@ WHERE {
          */
         const AggregationNodeStyles = {
             // ====================================================================
-            // Стиль для типа foaf:Person (люди) - эллипс с красным контуром
+            // Стиль для типа foaf:Person (люди) - эллипс с фиолетовым контуром
             // ====================================================================
             'PersonStyle': {
                 types: ['foaf:Person', 'schema:Person', 'http://xmlns.com/foaf/0.1/Person'],
                 // shape="ellipse" - всегда эллипс в режиме агрегации
-                // color="Red" - красный цвет контура
+                // color="#9C27B0" - фиолетовый цвет контура (изменено с красного для отличия от цвета выделения)
                 // penwidth="2" - толстый контур для выделения типа
-                // fillcolor="#FFEBEE" - светло-красная заливка
-                dot: 'shape="ellipse" color="Red" penwidth="2" fillcolor="#FFEBEE" fontname="Arial" fontsize="10" style="filled"',
+                // fillcolor="#F3E5F5" - светло-фиолетовая заливка
+                dot: 'shape="ellipse" color="#9C27B0" penwidth="2" fillcolor="#F3E5F5" fontname="Arial" fontsize="10" style="filled"',
                 label: 'Люди (foaf:Person)',
                 description: 'Объекты типа foaf:Person (режим агрегации)'
             },
@@ -3456,6 +3459,17 @@ ex:organizations {
                     // Показываем панели
                     document.getElementById('export-buttons').style.display = 'block';
                     document.getElementById('zoom-controls').style.display = 'flex';
+                } else if (outputFormat === 'drawio') {
+                    // Для Draw.io формата показываем SVG как превью и автоматически скачиваем файл
+                    output.innerHTML = svgString;
+                    currentSvgElement = output.querySelector('svg');
+
+                    // Показываем панели
+                    document.getElementById('export-buttons').style.display = 'block';
+                    document.getElementById('zoom-controls').style.display = 'flex';
+
+                    // Автоматически скачиваем Draw.io файл
+                    downloadDrawio();
                 }
 
                 // Отображаем легенду стилей (в режиме нотации и агрегации)
@@ -3619,6 +3633,284 @@ ex:organizations {
             } catch (error) {
                 console.error('Ошибка при скачивании PNG:', error);
                 alert('Ошибка при создании PNG файла');
+            }
+        }
+
+        /**
+         * Глобальные переменные для хранения данных о графе для Draw.io экспорта
+         * Заполняются при визуализации графа
+         */
+        let drawioGraphData = null;
+
+        /**
+         * Преобразует DOT-параметры стиля в параметры стиля Draw.io
+         *
+         * @param {string} dotStyle - Строка параметров DOT (например, 'shape="ellipse" color="#1976D2" fillcolor="#CCE5FF"')
+         * @param {boolean} isEdge - Является ли элемент ребром
+         * @returns {string} - Строка стиля Draw.io
+         */
+        function dotStyleToDrawio(dotStyle, isEdge = false) {
+            // Парсим DOT параметры
+            const params = {};
+            const regex = /(\w+)="([^"]*)"/g;
+            let match;
+            while ((match = regex.exec(dotStyle)) !== null) {
+                params[match[1]] = match[2];
+            }
+
+            if (isEdge) {
+                // Стиль для ребра
+                let style = 'edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;';
+
+                // Цвет линии
+                if (params.color) {
+                    style += `strokeColor=${params.color};`;
+                }
+
+                // Толщина линии
+                if (params.penwidth) {
+                    style += `strokeWidth=${params.penwidth};`;
+                }
+
+                // Стиль линии
+                if (params.style === 'dashed') {
+                    style += 'dashed=1;';
+                } else if (params.style === 'dotted') {
+                    style += 'dashed=1;dashPattern=1 2;';
+                }
+
+                // Стиль стрелки
+                if (params.arrowhead === 'empty') {
+                    style += 'endArrow=open;';
+                } else if (params.arrowhead === 'vee') {
+                    style += 'endArrow=classic;';
+                } else if (params.arrowhead === 'diamond') {
+                    style += 'endArrow=diamond;';
+                } else if (params.arrowhead === 'none') {
+                    style += 'endArrow=none;';
+                } else {
+                    style += 'endArrow=classic;';
+                }
+
+                return style;
+            } else {
+                // Стиль для узла
+                let style = 'whiteSpace=wrap;html=1;';
+
+                // Форма
+                const shape = params.shape || 'ellipse';
+                if (shape === 'ellipse') {
+                    style += 'ellipse;';
+                } else if (shape === 'box') {
+                    if (params.style && params.style.includes('rounded')) {
+                        style += 'rounded=1;';
+                    } else {
+                        style += 'rounded=0;';
+                    }
+                } else if (shape === 'octagon') {
+                    style += 'shape=hexagon;perimeter=hexagonPerimeter2;';
+                } else if (shape === 'note') {
+                    style += 'shape=note;';
+                } else {
+                    style += 'ellipse;';
+                }
+
+                // Цвет заливки
+                if (params.fillcolor) {
+                    style += `fillColor=${params.fillcolor};`;
+                }
+
+                // Цвет границы
+                if (params.color) {
+                    style += `strokeColor=${params.color};`;
+                }
+
+                // Толщина границы
+                if (params.penwidth) {
+                    style += `strokeWidth=${params.penwidth};`;
+                }
+
+                // Пунктирная граница
+                if (params.style && params.style.includes('dashed')) {
+                    style += 'dashed=1;';
+                }
+
+                // Размер шрифта
+                if (params.fontsize) {
+                    style += `fontSize=${params.fontsize};`;
+                }
+
+                return style;
+            }
+        }
+
+        /**
+         * Конвертирует RDF данные в формат Draw.io (несжатый XML)
+         *
+         * @param {Array} quads - Массив RDF триплетов
+         * @param {Object} prefixes - Объект с префиксами пространств имен
+         * @returns {string} - XML строка в формате Draw.io
+         */
+        function rdfToDrawio(quads, prefixes = {}) {
+            // Строим кэш типов для определения стилей узлов
+            buildNodeTypesCache(currentQuads, prefixes);
+
+            // Множества для хранения уникальных узлов и ребер
+            const nodes = new Map();
+            const edges = [];
+
+            // Обрабатываем каждый триплет
+            quads.forEach(quad => {
+                const subject = quad.subject;
+                const predicate = quad.predicate;
+                const object = quad.object;
+
+                const subjectValue = subject.value;
+                const predicateValue = predicate.value;
+                const objectValue = object.value;
+
+                const subjectLabel = getPrefixedName(subjectValue, prefixes);
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
+                const objectLabel = object.termType === 'Literal'
+                    ? `"${objectValue}"`
+                    : getPrefixedName(objectValue, prefixes);
+
+                // Создаем узлы
+                if (!nodes.has(subjectValue)) {
+                    nodes.set(subjectValue, {
+                        id: `node${nodes.size + 2}`,
+                        label: subjectLabel,
+                        value: subjectValue,
+                        isLiteral: false,
+                        isBlank: subject.termType === 'BlankNode'
+                    });
+                }
+
+                if (!nodes.has(objectValue)) {
+                    nodes.set(objectValue, {
+                        id: `node${nodes.size + 2}`,
+                        label: objectLabel,
+                        value: objectValue,
+                        isLiteral: object.termType === 'Literal',
+                        isBlank: object.termType === 'BlankNode'
+                    });
+                }
+
+                // Добавляем ребро
+                edges.push({
+                    id: `edge${edges.length + 1}`,
+                    from: nodes.get(subjectValue).id,
+                    to: nodes.get(objectValue).id,
+                    label: predicateLabel,
+                    predicateUri: predicateValue
+                });
+            });
+
+            // Генерируем Draw.io XML
+            const timestamp = new Date().toISOString();
+            let xml = `<mxfile host="app.diagrams.net" modified="${timestamp}" version="21.0.0" compressed="false" type="device">\n`;
+            xml += `  <diagram id="rdf-graph" name="RDF Graph">\n`;
+            xml += `    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">\n`;
+            xml += `      <root>\n`;
+            xml += `        <mxCell id="0"/>\n`;
+            xml += `        <mxCell id="1" parent="0"/>\n`;
+
+            // Размещаем узлы
+            const nodePositions = {};
+            let xPos = 100;
+            let yPos = 100;
+            const nodeWidth = 120;
+            const nodeHeight = 60;
+            const xSpacing = 180;
+            const ySpacing = 100;
+            const nodesPerRow = 5;
+            let nodeIndex = 0;
+
+            // Добавляем узлы
+            nodes.forEach((nodeInfo, value) => {
+                const nodeStyle = getNodeStyle(nodeInfo.value, nodeInfo.isLiteral, nodeInfo.isBlank);
+                const drawioStyle = dotStyleToDrawio(nodeStyle, false);
+
+                // Вычисляем позицию
+                const row = Math.floor(nodeIndex / nodesPerRow);
+                const col = nodeIndex % nodesPerRow;
+                const x = xPos + col * xSpacing;
+                const y = yPos + row * ySpacing;
+
+                nodePositions[nodeInfo.id] = { x, y, width: nodeWidth, height: nodeHeight };
+
+                // Экранируем специальные символы XML
+                const escapedLabel = nodeInfo.label
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+
+                xml += `        <mxCell id="${nodeInfo.id}" value="${escapedLabel}" style="${drawioStyle}" vertex="1" parent="1">\n`;
+                xml += `          <mxGeometry x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" as="geometry"/>\n`;
+                xml += `        </mxCell>\n`;
+
+                nodeIndex++;
+            });
+
+            // Добавляем ребра
+            edges.forEach(edge => {
+                const edgeStyle = getEdgeStyle(edge.predicateUri, edge.label);
+                const drawioEdgeStyle = dotStyleToDrawio(edgeStyle, true);
+
+                // Экранируем метку ребра
+                const escapedLabel = edge.label
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+
+                xml += `        <mxCell id="${edge.id}" value="${escapedLabel}" style="${drawioEdgeStyle}" edge="1" parent="1" source="${edge.from}" target="${edge.to}">\n`;
+                xml += `          <mxGeometry relative="1" as="geometry"/>\n`;
+                xml += `        </mxCell>\n`;
+            });
+
+            xml += `      </root>\n`;
+            xml += `    </mxGraphModel>\n`;
+            xml += `  </diagram>\n`;
+            xml += `</mxfile>`;
+
+            return xml;
+        }
+
+        /**
+         * Скачивает граф в формате Draw.io (несжатый XML)
+         * Файл может быть открыт на https://app.diagrams.net/
+         */
+        function downloadDrawio() {
+            if (currentQuads.length === 0) {
+                alert('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            try {
+                // Генерируем Draw.io XML
+                const drawioXml = rdfToDrawio(currentQuads, currentPrefixes);
+
+                // Создаем Blob для скачивания
+                const blob = new Blob([drawioXml], { type: 'application/xml;charset=utf-8' });
+
+                // Создаем ссылку для скачивания
+                const downloadLink = document.createElement('a');
+                downloadLink.href = URL.createObjectURL(blob);
+                downloadLink.download = 'rdf-graph.drawio';
+
+                // Инициируем скачивание
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+
+                // Освобождаем URL
+                URL.revokeObjectURL(downloadLink.href);
+
+            } catch (error) {
+                console.error('Ошибка при скачивании Draw.io файла:', error);
+                alert('Ошибка при создании Draw.io файла');
             }
         }
 
