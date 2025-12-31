@@ -272,6 +272,45 @@
         .example-link:hover {
             color: #45a049;
         }
+
+        /* Панель префиксов (Namespaces) */
+        .prefixes-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .prefixes-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .prefixes-content {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .prefix-line {
+            margin: 2px 0;
+        }
+
+        .prefix-name {
+            color: #6a1b9a;
+            font-weight: bold;
+        }
+
+        .prefix-url {
+            color: #1976D2;
+            text-decoration: none;
+        }
+
+        .prefix-url:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -398,6 +437,11 @@ ex:jane a foaf:Person ;
             <button onclick="downloadPNG()">Скачать PNG</button>
             <button onclick="openInNewWindowGitHub()">Показать в окне github</button>
             <button onclick="openInNewWindowLdfFi()">Показать в окне ldf.fi</button>
+        </div>
+        <!-- Панель префиксов (Namespaces) -->
+        <div class="prefixes-panel" id="prefixes-panel" style="display: none;">
+            <h3>Prefixes:</h3>
+            <div class="prefixes-content" id="prefixes-content"></div>
         </div>
     </div>
 
@@ -816,23 +860,7 @@ ex:organizations {
             dot += '    edge [fontname="Arial", fontsize=10];\n';
             dot += '\n';
 
-            // Добавляем блок Namespaces (префиксы), если есть использованные префиксы
-            if (usedPrefixes.size > 0) {
-                dot += '    // Блок Namespaces (префиксы)\n';
-
-                // Формируем текст для блока Namespaces
-                let namespacesText = 'Namespaces:\\l';
-                const sortedPrefixes = Array.from(usedPrefixes).sort();
-                for (const prefix of sortedPrefixes) {
-                    const namespace = prefixes[prefix];
-                    namespacesText += `${prefix}: ${namespace}\\l`;
-                }
-
-                // Добавляем узел с Namespaces (выравнивание справа внизу)
-                dot += `    namespaces [label="${escapeDotString(namespacesText)}", shape=box, style=filled, fillcolor="#f0f0f0", fontsize=10, fontname="Courier"];\n`;
-                dot += '    { rank=sink; namespaces; }\n';
-                dot += '\n';
-            }
+            // Блок Namespaces теперь отображается отдельно под графом, а не внутри SVG
 
             // Добавляем узлы
             dot += '    // Узлы графа\n';
@@ -881,9 +909,10 @@ ex:organizations {
                 </div>
             `;
 
-            // Скрываем кнопки экспорта и управление масштабом во время загрузки
+            // Скрываем кнопки экспорта, управление масштабом и панель префиксов во время загрузки
             document.getElementById('export-buttons').style.display = 'none';
             document.getElementById('zoom-controls').style.display = 'none';
+            document.getElementById('prefixes-panel').style.display = 'none';
         }
 
         /**
@@ -898,9 +927,45 @@ ex:organizations {
             resultContainer.style.display = 'block';
             output.innerHTML = `<div class="error"><strong>Ошибка:</strong> ${message}</div>`;
 
-            // Скрываем кнопки экспорта и управление масштабом при ошибке
+            // Скрываем кнопки экспорта, управление масштабом и панель префиксов при ошибке
             document.getElementById('export-buttons').style.display = 'none';
             document.getElementById('zoom-controls').style.display = 'none';
+            document.getElementById('prefixes-panel').style.display = 'none';
+        }
+
+        /**
+         * Отображает панель префиксов с кликабельными URL
+         *
+         * @param {Object} prefixes - Объект с префиксами (prefix -> namespace)
+         */
+        function displayPrefixes(prefixes) {
+            const prefixesPanel = document.getElementById('prefixes-panel');
+            const prefixesContent = document.getElementById('prefixes-content');
+
+            // Получаем список использованных префиксов
+            const prefixEntries = Object.entries(prefixes);
+
+            // Если нет префиксов, скрываем панель
+            if (prefixEntries.length === 0) {
+                prefixesPanel.style.display = 'none';
+                return;
+            }
+
+            // Сортируем префиксы по имени
+            prefixEntries.sort((a, b) => a[0].localeCompare(b[0]));
+
+            // Формируем HTML для отображения префиксов
+            let html = '';
+            for (const [prefix, namespace] of prefixEntries) {
+                // Создаем кликабельную ссылку для namespace
+                html += `<div class="prefix-line">`;
+                html += `<span class="prefix-name">@prefix ${prefix}:</span> `;
+                html += `<a href="${namespace}" class="prefix-url" target="_blank">&lt;${namespace}&gt;</a> .`;
+                html += `</div>`;
+            }
+
+            prefixesContent.innerHTML = html;
+            prefixesPanel.style.display = 'block';
         }
 
         /**
@@ -1013,6 +1078,9 @@ ex:organizations {
                     document.getElementById('export-buttons').style.display = 'block';
                     document.getElementById('zoom-controls').style.display = 'flex';
                 }
+
+                // Отображаем панель префиксов
+                displayPrefixes(prefixes);
 
                 // Выводим статистику
                 console.log(`Обработано ${quads.length} триплетов`);
