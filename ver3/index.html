@@ -887,6 +887,15 @@ ex:jane a foaf:Person ;
                     Включите для выполнения SPARQL запросов к графу
                 </div>
             </div>
+
+            <!-- Максимальная длина наименования (для режимов агрегации и нотации) -->
+            <div class="form-group" id="max-label-length-group">
+                <label for="max-label-length">Макс. длина имени:</label>
+                <input type="number" id="max-label-length" value="25" min="5" max="200" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                <div class="mode-description" id="max-label-length-description">
+                    Перенос по словам при превышении (для агрегации/нотации)
+                </div>
+            </div>
         </div>
 
         <!-- Кнопка визуализации -->
@@ -1095,6 +1104,22 @@ WHERE {
          * и это значение ограничивает количество отображаемых строк.
          */
         const MaxAggregationParams = 5;
+
+        /**
+         * DEFAULT_MAX_LABEL_LENGTH - Максимальная длина наименования объекта (символов)
+         * по умолчанию для режимов агрегации и нотации.
+         *
+         * При превышении этого значения наименование переносится на несколько строк
+         * (по словам, без разрыва слов) и отображается более мелким шрифтом.
+         * В базовом режиме ограничение не применяется.
+         */
+        const DEFAULT_MAX_LABEL_LENGTH = 25;
+
+        /**
+         * Текущее значение максимальной длины наименования объекта.
+         * Может быть изменено пользователем в настройках.
+         */
+        let currentMaxLabelLength = DEFAULT_MAX_LABEL_LENGTH;
 
         // ============================================================================
         // КОНФИГУРАЦИЯ СТИЛЕЙ (StyleName)
@@ -2843,6 +2868,84 @@ ex:organizations {
         }
 
         /**
+         * Разбивает текст на строки с переносом по словам.
+         * Не разрывает слова, переносит целыми словами.
+         *
+         * @param {string} text - Исходный текст
+         * @param {number} maxLength - Максимальная длина строки
+         * @returns {string[]} - Массив строк с переносами
+         */
+        function wrapTextByWords(text, maxLength) {
+            if (!text || text.length <= maxLength) {
+                return [text];
+            }
+
+            const words = text.split(/\s+/);
+            const lines = [];
+            let currentLine = '';
+
+            for (const word of words) {
+                if (currentLine.length === 0) {
+                    // Первое слово в строке
+                    currentLine = word;
+                } else if (currentLine.length + 1 + word.length <= maxLength) {
+                    // Слово помещается в текущую строку
+                    currentLine += ' ' + word;
+                } else {
+                    // Слово не помещается, начинаем новую строку
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+
+            // Добавляем последнюю строку
+            if (currentLine.length > 0) {
+                lines.push(currentLine);
+            }
+
+            return lines;
+        }
+
+        /**
+         * Форматирует метку узла с учетом максимальной длины для режимов агрегации и нотации.
+         * При превышении maxLength текст переносится по словам и используется меньший шрифт.
+         * Возвращает HTML-like label для DOT (с тегами <BR/>, <FONT> и т.д.)
+         *
+         * @param {string} label - Исходная метка
+         * @param {number} maxLength - Максимальная длина строки
+         * @param {boolean} isBold - Использовать жирный шрифт
+         * @returns {string} - Отформатированная HTML-like метка для DOT
+         */
+        function formatLabelWithWrap(label, maxLength, isBold = false) {
+            const lines = wrapTextByWords(label, maxLength);
+            const needsWrap = lines.length > 1;
+
+            // Если нет переноса, возвращаем простую метку
+            if (!needsWrap) {
+                if (isBold) {
+                    return `<B>${escapeHtmlLabel(label)}</B>`;
+                }
+                return escapeHtmlLabel(label);
+            }
+
+            // При переносе используем мелкий шрифт (POINT-SIZE="9")
+            let result = '';
+            for (let i = 0; i < lines.length; i++) {
+                if (i > 0) {
+                    result += '<BR/>';
+                }
+                const escapedLine = escapeHtmlLabel(lines[i]);
+                if (isBold) {
+                    result += `<FONT POINT-SIZE="9"><B>${escapedLine}</B></FONT>`;
+                } else {
+                    result += `<FONT POINT-SIZE="9">${escapedLine}</FONT>`;
+                }
+            }
+
+            return result;
+        }
+
+        /**
          * Преобразует RDF триплеты в DOT-код для Graphviz в режиме агрегации
          * В этом режиме литералы агрегируются внутри узла субъекта
          *
@@ -2962,45 +3065,36 @@ ex:organizations {
                 const nameLabelLiterals = literals.filter(l => l.isNameLabel);
                 const otherLiterals = literals.filter(l => !l.isNameLabel);
 
-                // Собираем все строки для label
-                let labelLines = [];
-
-                // Первая строка - идентификатор узла (всегда показываем)
-                labelLines.push(escapeHtmlLabel(nodeInfo.label));
-
-                // Добавляем name/label литералы (обычный шрифт)
-                // Используем глобальную константу MaxAggregationParams
-                nameLabelLiterals.forEach(lit => {
-                    if (labelLines.length < MaxAggregationParams) {
-                        labelLines.push(escapeHtmlLabel(lit.value));
-                    }
-                });
-
-                // Добавляем остальные литералы (мелкий шрифт через FONT тег)
-                otherLiterals.forEach(lit => {
-                    if (labelLines.length < MaxAggregationParams) {
-                        // Формат: "predicate: value" для остальных литералов
-                        labelLines.push(escapeHtmlLabel(lit.predicate) + ': ' + escapeHtmlLabel(lit.value));
-                    }
-                });
-
                 // Формируем HTML-like label для простого многострочного текста в эллипсе
                 // Используем <BR/> для переноса строк и FONT для разных размеров
                 let htmlLabel = '<';
 
-                // Первая строка (идентификатор) - жирным обычным шрифтом
-                htmlLabel += `<B>${labelLines[0]}</B>`;
+                // Первая строка (идентификатор) - жирным шрифтом с переносом по словам
+                htmlLabel += formatLabelWithWrap(nodeInfo.label, currentMaxLabelLength, true);
 
-                // Остальные строки
-                for (let i = 1; i < labelLines.length; i++) {
+                // Счетчик добавленных строк (для ограничения MaxAggregationParams)
+                let addedLines = 1;
+
+                // Добавляем name/label литералы (обычный шрифт с переносом по словам)
+                for (const lit of nameLabelLiterals) {
+                    if (addedLines >= MaxAggregationParams) break;
                     htmlLabel += '<BR/>';
-                    // name/label литералы (индексы 1..nameLabelLiterals.length) - обычный шрифт
-                    if (i <= nameLabelLiterals.length) {
-                        htmlLabel += labelLines[i];
-                    } else {
-                        // Остальные литералы - мелкий шрифт
-                        htmlLabel += `<FONT POINT-SIZE="8">${labelLines[i]}</FONT>`;
+                    htmlLabel += formatLabelWithWrap(lit.value, currentMaxLabelLength, false);
+                    addedLines++;
+                }
+
+                // Добавляем остальные литералы (мелкий шрифт через FONT тег с переносом по словам)
+                for (const lit of otherLiterals) {
+                    if (addedLines >= MaxAggregationParams) break;
+                    htmlLabel += '<BR/>';
+                    // Формат: "predicate: value" для остальных литералов
+                    const fullText = lit.predicate + ': ' + lit.value;
+                    const wrappedLines = wrapTextByWords(fullText, currentMaxLabelLength);
+                    for (let j = 0; j < wrappedLines.length; j++) {
+                        if (j > 0) htmlLabel += '<BR/>';
+                        htmlLabel += `<FONT POINT-SIZE="8">${escapeHtmlLabel(wrappedLines[j])}</FONT>`;
                     }
+                    addedLines++;
                 }
 
                 htmlLabel += '>';
@@ -3139,8 +3233,15 @@ ex:organizations {
                 // Получаем стиль для узла на основе его типа
                 const nodeStyle = getNodeStyle(nodeInfo.value, nodeInfo.isLiteral, nodeInfo.isBlank);
 
-                // Формируем определение узла
-                dot += `    ${nodeInfo.id} [label="${escapeDotString(nodeInfo.label)}" ${nodeStyle}];\n`;
+                // В режиме нотации применяем перенос по словам для длинных меток
+                if (currentMode === 'notation' && nodeInfo.label.length > currentMaxLabelLength) {
+                    // Используем HTML-like label с переносом по словам
+                    const wrappedLabel = formatLabelWithWrap(nodeInfo.label, currentMaxLabelLength, false);
+                    dot += `    ${nodeInfo.id} [label=<${wrappedLabel}> ${nodeStyle}];\n`;
+                } else {
+                    // Для коротких меток и базового режима - обычный label
+                    dot += `    ${nodeInfo.id} [label="${escapeDotString(nodeInfo.label)}" ${nodeStyle}];\n`;
+                }
             });
 
             dot += '\n';
@@ -3344,6 +3445,18 @@ ex:organizations {
             const outputFormat = document.getElementById('output-format').value;
             const layoutEngine = document.getElementById('layout-engine').value;
             const visualizationMode = document.getElementById('visualization-mode').value;
+
+            // Получаем значение максимальной длины наименования из настроек
+            const maxLabelLengthInput = document.getElementById('max-label-length');
+            const maxLabelLengthValue = parseInt(maxLabelLengthInput.value, 10);
+            // Проверяем валидность и обновляем глобальную переменную
+            if (!isNaN(maxLabelLengthValue) && maxLabelLengthValue >= 5 && maxLabelLengthValue <= 200) {
+                currentMaxLabelLength = maxLabelLengthValue;
+            } else {
+                // Восстанавливаем значение по умолчанию при некорректном вводе
+                currentMaxLabelLength = DEFAULT_MAX_LABEL_LENGTH;
+                maxLabelLengthInput.value = DEFAULT_MAX_LABEL_LENGTH;
+            }
 
             // Сохраняем текущий режим визуализации
             currentMode = visualizationMode;
@@ -3865,21 +3978,30 @@ ex:organizations {
                 const otherLiterals = literals.filter(l => !l.isNameLabel);
 
                 let labelLines = [];
-                labelLines.push(nodeInfo.label);
 
-                // Добавляем name/label литералы
-                nameLabelLiterals.forEach(lit => {
-                    if (labelLines.length < MaxAggregationParams) {
-                        labelLines.push(lit.value);
-                    }
-                });
+                // Первая строка - идентификатор узла с переносом по словам
+                const nodeIdLines = wrapTextByWords(nodeInfo.label, currentMaxLabelLength);
+                labelLines.push(...nodeIdLines);
 
-                // Добавляем остальные литералы
-                otherLiterals.forEach(lit => {
-                    if (labelLines.length < MaxAggregationParams) {
-                        labelLines.push(lit.predicate + ': ' + lit.value);
-                    }
-                });
+                // Счетчик добавленных элементов (для ограничения MaxAggregationParams)
+                let addedItems = 1;
+
+                // Добавляем name/label литералы с переносом по словам
+                for (const lit of nameLabelLiterals) {
+                    if (addedItems >= MaxAggregationParams) break;
+                    const wrappedLines = wrapTextByWords(lit.value, currentMaxLabelLength);
+                    labelLines.push(...wrappedLines);
+                    addedItems++;
+                }
+
+                // Добавляем остальные литералы с переносом по словам
+                for (const lit of otherLiterals) {
+                    if (addedItems >= MaxAggregationParams) break;
+                    const fullText = lit.predicate + ': ' + lit.value;
+                    const wrappedLines = wrapTextByWords(fullText, currentMaxLabelLength);
+                    labelLines.push(...wrappedLines);
+                    addedItems++;
+                }
 
                 // Объединяем строки в многострочный label
                 const multilineLabel = labelLines.join('\n');
@@ -4031,15 +4153,27 @@ ex:organizations {
 
                 nodePositions[nodeInfo.id] = { x, y, width: nodeWidth, height: nodeHeight };
 
+                // В режиме нотации применяем перенос по словам для длинных меток
+                let labelForDrawio = nodeInfo.label;
+                let adjustedHeight = nodeHeight;
+
+                if (currentMode === 'notation' && nodeInfo.label.length > currentMaxLabelLength) {
+                    const wrappedLines = wrapTextByWords(nodeInfo.label, currentMaxLabelLength);
+                    labelForDrawio = wrappedLines.join('\n');
+                    // Увеличиваем высоту узла в зависимости от количества строк
+                    adjustedHeight = nodeHeight + (wrappedLines.length - 1) * 15;
+                }
+
                 // Экранируем специальные символы XML
-                const escapedLabel = nodeInfo.label
+                const escapedLabel = labelForDrawio
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
                     .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;');
+                    .replace(/"/g, '&quot;')
+                    .replace(/\n/g, '&#xa;');
 
                 xml += `        <mxCell id="${nodeInfo.id}" value="${escapedLabel}" style="${drawioStyle}" vertex="1" parent="1">\n`;
-                xml += `          <mxGeometry x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" as="geometry"/>\n`;
+                xml += `          <mxGeometry x="${x}" y="${y}" width="${nodeWidth}" height="${adjustedHeight}" as="geometry"/>\n`;
                 xml += `        </mxCell>\n`;
 
                 nodeIndex++;

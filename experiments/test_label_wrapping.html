@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Label Wrapping</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .pass { background-color: #e8f5e9; }
+        .fail { background-color: #ffebee; }
+        h2 { color: #333; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test: Label Wrapping Function</h1>
+    <div id="results"></div>
+
+    <script>
+        // Copy of the wrapTextByWords function for testing
+        function wrapTextByWords(text, maxLength) {
+            if (!text || text.length <= maxLength) {
+                return [text];
+            }
+
+            const words = text.split(/\s+/);
+            const lines = [];
+            let currentLine = '';
+
+            for (const word of words) {
+                if (currentLine.length === 0) {
+                    currentLine = word;
+                } else if (currentLine.length + 1 + word.length <= maxLength) {
+                    currentLine += ' ' + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+
+            if (currentLine.length > 0) {
+                lines.push(currentLine);
+            }
+
+            return lines;
+        }
+
+        // Test cases
+        const tests = [
+            {
+                name: "Short text (no wrapping needed)",
+                input: { text: "Hello World", maxLength: 25 },
+                expected: ["Hello World"]
+            },
+            {
+                name: "Exact length text (no wrapping)",
+                input: { text: "This is exactly 25 chars", maxLength: 25 },
+                expected: ["This is exactly 25 chars"]
+            },
+            {
+                name: "Long text with multiple words",
+                input: { text: "Это очень длинное наименование объекта которое нужно перенести", maxLength: 25 },
+                expected: ["Это очень длинное", "наименование объекта", "которое нужно перенести"]
+            },
+            {
+                name: "Single very long word",
+                input: { text: "VeryLongWordWithoutSpacesThatExceedsTheLimit", maxLength: 25 },
+                expected: ["VeryLongWordWithoutSpacesThatExceedsTheLimit"]
+            },
+            {
+                name: "Empty text",
+                input: { text: "", maxLength: 25 },
+                expected: [""]
+            },
+            {
+                name: "URI-like text",
+                input: { text: "http://example.org/very/long/path/to/resource", maxLength: 25 },
+                expected: ["http://example.org/very/long/path/to/resource"]
+            },
+            {
+                name: "Prefixed name",
+                input: { text: "foaf:PersonWithVeryLongNameThatNeedsWrapping", maxLength: 25 },
+                expected: ["foaf:PersonWithVeryLongNameThatNeedsWrapping"]
+            },
+            {
+                name: "Literal with spaces",
+                input: { text: "John Doe the Third from Organization XYZ Corporation", maxLength: 25 },
+                expected: ["John Doe the Third from", "Organization XYZ", "Corporation"]
+            }
+        ];
+
+        // Run tests
+        const resultsDiv = document.getElementById('results');
+        let passCount = 0;
+        let failCount = 0;
+
+        tests.forEach((test, index) => {
+            const result = wrapTextByWords(test.input.text, test.input.maxLength);
+            const passed = JSON.stringify(result) === JSON.stringify(test.expected);
+
+            if (passed) passCount++;
+            else failCount++;
+
+            const testDiv = document.createElement('div');
+            testDiv.className = `test ${passed ? 'pass' : 'fail'}`;
+            testDiv.innerHTML = `
+                <h2>Test ${index + 1}: ${test.name} - ${passed ? 'PASS' : 'FAIL'}</h2>
+                <p><strong>Input:</strong> "${test.input.text}" (maxLength: ${test.input.maxLength})</p>
+                <p><strong>Expected:</strong></p>
+                <pre>${JSON.stringify(test.expected, null, 2)}</pre>
+                <p><strong>Got:</strong></p>
+                <pre>${JSON.stringify(result, null, 2)}</pre>
+            `;
+            resultsDiv.appendChild(testDiv);
+        });
+
+        // Summary
+        const summaryDiv = document.createElement('div');
+        summaryDiv.innerHTML = `
+            <h2>Summary</h2>
+            <p>Passed: ${passCount}/${tests.length}</p>
+            <p>Failed: ${failCount}/${tests.length}</p>
+        `;
+        resultsDiv.insertBefore(summaryDiv, resultsDiv.firstChild);
+
+        console.log(`Tests: ${passCount} passed, ${failCount} failed`);
+    </script>
+</body>
+</html>
