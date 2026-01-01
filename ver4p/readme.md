@@ -2,3 +2,6 @@
 
 ### dot
 - https://graphviz.org/doc/info/shapes.html
+
+### test
+https://bpmbpm.github.io/rdf-grapher/ver4p/
