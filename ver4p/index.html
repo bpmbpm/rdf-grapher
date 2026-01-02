@@ -2265,11 +2265,14 @@ ex:organizations {
                 }
             });
 
+            // Собираем информацию о подписях исполнителей для каждого процесса
+            const processExecutorsLabels = new Map();  // nodeId -> executorsList
+
             visibleProcesses.forEach((processInfo, uri) => {
                 const nodeId = generateNodeId(uri);
                 const processName = processInfo.name || processInfo.label;
 
-                // Получаем список исполнителей для подписи под фигурой (xlabel)
+                // Получаем список исполнителей для подписи под фигурой
                 let executorsList = '';
                 if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
                     const group = executorGroups.get(processInfo.executorGroup);
@@ -2279,35 +2282,22 @@ ex:organizations {
                     executorsList = executorNamesList.join(', ');
                 }
 
-                // Формируем HTML TABLE label с именем процесса и исполнителями внутри
-                // Используем TABLE для правильного центрирования содержимого в CDS-фигуре
+                // Сохраняем информацию об исполнителях для создания отдельных узлов подписей
+                if (executorsList) {
+                    processExecutorsLabels.set(nodeId, executorsList);
+                }
+
+                // Формируем HTML label только с именем процесса (исполнители будут в отдельном узле)
                 const wrappedProcessName = wrapTextByWords(processName, currentMaxLabelLength);
 
-                let htmlLabel = '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">';
-
-                // Добавляем имя процесса (жирным шрифтом)
-                htmlLabel += '<TR><TD>';
+                let htmlLabel = '<';
                 for (let i = 0; i < wrappedProcessName.length; i++) {
                     if (i > 0) htmlLabel += '<BR/>';
                     htmlLabel += `<B>${escapeHtmlLabel(wrappedProcessName[i])}</B>`;
                 }
-                htmlLabel += '</TD></TR>';
-
-                // Добавляем исполнителей под именем процесса (если есть)
-                if (executorsList) {
-                    const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
-                    htmlLabel += '<TR><TD><FONT POINT-SIZE="9" COLOR="#555555">';
-                    for (let i = 0; i < wrappedExecutors.length; i++) {
-                        if (i > 0) htmlLabel += '<BR/>';
-                        htmlLabel += escapeHtmlLabel(wrappedExecutors[i]);
-                    }
-                    htmlLabel += '</FONT></TD></TR>';
-                }
-
-                htmlLabel += '</TABLE>>';
+                htmlLabel += '>';
 
                 // cds shape с зеленой заливкой
-                // Убираем фиксированные размеры, чтобы узел мог адаптироваться под содержимое
                 let nodeStyle = 'shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"';
 
                 dot += `    ${nodeId} [label=${htmlLabel} ${nodeStyle}];\n`;
@@ -2315,6 +2305,37 @@ ex:organizations {
             });
 
             dot += '\n';
+
+            // Добавляем отдельные узлы с подписями исполнителей (plaintext, без рамки)
+            // Эти узлы будут позиционированы под CDS-фигурами с помощью невидимых связей
+            if (processExecutorsLabels.size > 0) {
+                dot += '    // Подписи исполнителей (plaintext узлы под CDS-фигурами)\n';
+
+                processExecutorsLabels.forEach((executorsList, processNodeId) => {
+                    const labelNodeId = `${processNodeId}_label`;
+                    const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
+
+                    let labelHtml = '<<FONT POINT-SIZE="9" COLOR="#555555">';
+                    for (let i = 0; i < wrappedExecutors.length; i++) {
+                        if (i > 0) labelHtml += '<BR/>';
+                        labelHtml += escapeHtmlLabel(wrappedExecutors[i]);
+                    }
+                    labelHtml += '</FONT>>';
+
+                    dot += `    ${labelNodeId} [label=${labelHtml} shape="plaintext" fontname="Arial"];\n`;
+                });
+
+                dot += '\n';
+
+                // Добавляем невидимые связи от процессов к их подписям для позиционирования
+                dot += '    // Невидимые связи для позиционирования подписей под процессами\n';
+                processExecutorsLabels.forEach((executorsList, processNodeId) => {
+                    const labelNodeId = `${processNodeId}_label`;
+                    dot += `    ${processNodeId} -> ${labelNodeId} [style=invis];\n`;
+                });
+
+                dot += '\n';
+            }
 
             // Добавляем ребра hasNext
             dot += '    // Связи hasNext (восток -> запад)\n';
@@ -2994,8 +3015,8 @@ ex:organizations {
 
         /**
          * Открывает визуализацию в новом окне через GitHub Pages (без внешнего сервиса)
-         * Формирует URL с параметрами: rdf=данные&from=формат&to=формат&mode=режим
-         * Аналогично работе LDF сервиса
+         * Формирует URL с данными в хеше: #rdf=данные&from=формат&to=формат&mode=режим
+         * Использует URL fragment (hash) вместо query params для избежания ошибки URI Too Long
          */
         function openInNewWindowGitHub() {
             // Получаем входные данные
@@ -3014,7 +3035,7 @@ ex:organizations {
             const fromFormat = formatMapping[inputFormat] || 'ttl';
 
             // Кодируем RDF данные для URL
-            const encodedRdf = encodeURIComponent(rdfInput).replace(/%20/g, '+');
+            const encodedRdf = encodeURIComponent(rdfInput);
 
             // Определяем базовый URL для GitHub Pages
             let baseUrl;
@@ -3025,8 +3046,9 @@ ex:organizations {
                 baseUrl = window.location.origin + window.location.pathname;
             }
 
-            // Формируем URL с параметрами (включая mode для режима визуализации)
-            const serviceUrl = `${baseUrl}?rdf=${encodedRdf}&from=${fromFormat}&to=${outputFormat}&mode=${visualizationMode}`;
+            // Формируем URL с данными в хеше (избегает ошибки URI Too Long)
+            const hashParams = `rdf=${encodedRdf}&from=${fromFormat}&to=${outputFormat}&mode=${visualizationMode}`;
+            const serviceUrl = `${baseUrl}#${hashParams}`;
 
             // Открываем в новом окне
             window.open(serviceUrl, '_blank');
@@ -3256,6 +3278,9 @@ ex:organizations {
 
         /**
          * Парсит URL параметры и возвращает объект с параметрами
+         * Поддерживает параметры как в query string (?...), так и в hash (#...)
+         * Hash имеет приоритет над query string для избежания ошибки URI Too Long
+         *
          * Поддерживаемые параметры:
          * - rdf: RDF данные (URL-encoded)
          * - from: входной формат (ttl, nt, nq, trig)
@@ -3265,8 +3290,28 @@ ex:organizations {
          * @returns {Object} - Объект с параметрами
          */
         function parseUrlParams() {
-            const urlParams = new URLSearchParams(window.location.search);
+            // Сначала пробуем получить параметры из hash (приоритет)
+            let urlParams;
+            if (window.location.hash && window.location.hash.length > 1) {
+                // Убираем # и парсим как URLSearchParams
+                urlParams = new URLSearchParams(window.location.hash.substring(1));
+            } else {
+                // Fallback на query string для обратной совместимости
+                urlParams = new URLSearchParams(window.location.search);
+            }
+
             const params = {};
+
+            // Маппинг обратный: параметры URL -> внутренние форматы
+            const reverseFormatMapping = {
+                'ttl': 'turtle',
+                'turtle': 'turtle',
+                'nt': 'n-triples',
+                'n-triples': 'n-triples',
+                'nq': 'n-quads',
+                'n-quads': 'n-quads',
+                'trig': 'trig'
+            };
 
             // Получаем RDF данные из параметра
             if (urlParams.has('rdf')) {
@@ -3276,16 +3321,6 @@ ex:organizations {
             // Получаем входной формат
             if (urlParams.has('from')) {
                 const fromParam = urlParams.get('from');
-                // Маппинг обратный: параметры URL -> внутренние форматы
-                const reverseFormatMapping = {
-                    'ttl': 'turtle',
-                    'turtle': 'turtle',
-                    'nt': 'n-triples',
-                    'n-triples': 'n-triples',
-                    'nq': 'n-quads',
-                    'n-quads': 'n-quads',
-                    'trig': 'trig'
-                };
                 params.from = reverseFormatMapping[fromParam] || 'turtle';
             }
 

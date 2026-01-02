@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test xlabel positioning below CDS nodes</title>
+    <script src="https://unpkg.com/@viz-js/viz@3.4.0/lib/viz-standalone.js"></script>
+</head>
+<body>
+    <h1>Testing xlabel positioning below CDS nodes</h1>
+    <p>Testing different approaches to position executor labels below CDS shapes.</p>
+
+    <h2>Test 1: Current approach (TABLE inside CDS) - labels inside figure</h2>
+    <div id="test1"></div>
+
+    <h2>Test 2: xlabel with forcelabels=true (default positioning)</h2>
+    <div id="test2"></div>
+
+    <h2>Test 3: Using record shape with vertical ports to simulate below-label</h2>
+    <div id="test3"></div>
+
+    <h2>Test 4: Separate label nodes below (using subgraph with same rank)</h2>
+    <div id="test4"></div>
+
+    <h2>Test 5: HTML TABLE with invisible bottom cell</h2>
+    <div id="test5"></div>
+
+    <script>
+        async function runTests() {
+            const viz = await Viz.instance();
+
+            // Test 1: Current approach (TABLE inside CDS)
+            const dot1 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+
+    P1 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+        <TR><TD><B>Процесс 1</B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1,<BR/>Исполнитель 2</FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled"];
+
+    P2 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+        <TR><TD><B>Процесс 2</B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 3</FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled"];
+
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+            try {
+                document.getElementById('test1').innerHTML = viz.renderSVGElement(dot1).outerHTML;
+            } catch(e) {
+                document.getElementById('test1').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test1').innerHTML += '<pre>' + dot1 + '</pre>';
+
+            // Test 2: xlabel with forcelabels
+            const dot2 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    forcelabels=true;
+
+    P1 [label=<<B>Процесс 1</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled" xlabel=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>>];
+    P2 [label=<<B>Процесс 2</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled" xlabel=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>>];
+
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+            try {
+                document.getElementById('test2').innerHTML = viz.renderSVGElement(dot2).outerHTML;
+            } catch(e) {
+                document.getElementById('test2').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test2').innerHTML += '<pre>' + dot2 + '</pre>';
+
+            // Test 3: Using record shape with ports
+            const dot3 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+
+    P1 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+        <TR><TD HEIGHT="60" WIDTH="100" BGCOLOR="#A5D6A7"><B>Процесс 1</B></TD></TR>
+        <TR><TD HEIGHT="20"><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1, Исполнитель 2</FONT></TD></TR>
+    </TABLE>> shape="none" margin="0"];
+
+    P2 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+        <TR><TD HEIGHT="60" WIDTH="100" BGCOLOR="#A5D6A7"><B>Процесс 2</B></TD></TR>
+        <TR><TD HEIGHT="20"><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 3</FONT></TD></TR>
+    </TABLE>> shape="none" margin="0"];
+
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee"];
+}`;
+            try {
+                document.getElementById('test3').innerHTML = viz.renderSVGElement(dot3).outerHTML;
+            } catch(e) {
+                document.getElementById('test3').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test3').innerHTML += '<pre>' + dot3 + '</pre>';
+
+            // Test 4: Separate label nodes below with invisible edges and rank constraint
+            const dot4 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    nodesep=0.3;
+
+    // Process nodes
+    P1 [label=<<B>Процесс 1</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<<B>Процесс 2</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Label nodes (plaintext, no border)
+    L1 [label=<<FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="plaintext"];
+    L2 [label=<<FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 3</FONT>> shape="plaintext"];
+
+    // Invisible edges to position labels below
+    P1 -> L1 [style=invis minlen=0];
+    P2 -> L2 [style=invis minlen=0];
+
+    // Process flow
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+            try {
+                document.getElementById('test4').innerHTML = viz.renderSVGElement(dot4).outerHTML;
+            } catch(e) {
+                document.getElementById('test4').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test4').innerHTML += '<pre>' + dot4 + '</pre>';
+
+            // Test 5: HTML TABLE with CDS-like appearance and separate label row outside
+            const dot5 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    forcelabels=true;
+
+    // Using HTML-like labels with xlabel positioned south
+    P1 [label=<<B>Процесс 1</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled" xlabel=<<FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1,<BR/>Исполнитель 2</FONT>>];
+    P2 [label=<<B>Процесс 2</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled" xlabel=<<FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 3</FONT>>];
+
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+            try {
+                document.getElementById('test5').innerHTML = viz.renderSVGElement(dot5).outerHTML;
+            } catch(e) {
+                document.getElementById('test5').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test5').innerHTML += '<pre>' + dot5 + '</pre>';
+        }
+
+        runTests();
+    </script>
+</body>
+</html>
