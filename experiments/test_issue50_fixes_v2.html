@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Issue 50 Fixes v2 - Using subgraphs for CDS+Executor pairs</title>
+    <script src="https://unpkg.com/@viz-js/viz@3.4.0/lib/viz-standalone.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { margin: 20px 0; border: 1px solid #ccc; padding: 15px; }
+        h2 { color: #333; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; font-size: 11px; }
+        .issue { color: red; }
+        .fix { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Issue 50 Fixes v2 - Subgraph approach</h1>
+    <p>Testing alternative approaches to align CDS horizontally with executors below.</p>
+
+    <div class="test">
+        <h2>Test 1: Using rankdir=TB with rank=same for horizontal process alignment</h2>
+        <p class="fix">Using rankdir=TB and rank=same for processes on same row</p>
+        <div id="test1"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 2: Using invisible edges with minlen=0 and constraint=false</h2>
+        <p class="fix">Keep rankdir=LR but use constraint=false on invisible edges to executor labels</p>
+        <div id="test2"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 3: Using clusters (subgraph cluster_) to group CDS with executor</h2>
+        <p class="fix">Each CDS+Executor pair in a cluster with style=invis</p>
+        <div id="test3"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 4: Using TB direction with rank constraints</h2>
+        <p class="fix">rankdir=TB with rank=same for all processes, rank=same for all executors</p>
+        <div id="test4"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 5: Final approach - HTML table inside invisible node</h2>
+        <p class="fix">Use an HTML table to compose CDS shape + executor label as single unit</p>
+        <div id="test5"></div>
+    </div>
+
+    <script>
+        async function runTests() {
+            const viz = await Viz.instance();
+
+            // Test 1: rankdir=TB with rank=same
+            const dot1 = `
+digraph VADGraph {
+    rankdir=TB;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    nodesep=0.8;
+    ranksep=0.5;
+
+    // Process nodes (NOT bold)
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Executor nodes (yellow ellipse)
+    E1 [label=<<FONT POINT-SIZE="9">Исполнитель 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E2 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E3 [label=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E4 [label=<<FONT POINT-SIZE="9">Исполнитель 3,<BR/>Исполнитель 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+
+    // All processes on same horizontal row (rank=same in TB mode)
+    { rank=same; P1; P2; P3; P4; }
+
+    // All executors on same row below
+    { rank=same; E1; E2; E3; E4; }
+
+    // Invisible vertical edges to position executors below their CDS
+    P1 -> E1 [style=invis];
+    P2 -> E2 [style=invis];
+    P3 -> E3 [style=invis];
+    P4 -> E4 [style=invis];
+
+    // Process flow (horizontal in TB mode uses east/west ports)
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee"];
+}`;
+
+            renderTest('test1', viz, dot1);
+
+            // Test 2: constraint=false on invisible edges
+            const dot2 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+
+    // Process nodes
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Executor nodes
+    E1 [label=<<FONT POINT-SIZE="9">Исполнитель 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E2 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E3 [label=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E4 [label=<<FONT POINT-SIZE="9">Исполнитель 3,<BR/>Исполнитель 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+
+    // Invisible edges with constraint=false (don't affect ranking)
+    P1 -> E1 [style=invis constraint=false];
+    P2 -> E2 [style=invis constraint=false];
+    P3 -> E3 [style=invis constraint=false];
+    P4 -> E4 [style=invis constraint=false];
+
+    // Process flow
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+
+            renderTest('test2', viz, dot2);
+
+            // Test 3: Clusters
+            const dot3 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    compound=true;
+
+    subgraph cluster_1 {
+        style=invis;
+        P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+        E1 [label=<<FONT POINT-SIZE="9">Исполнитель 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+        P1 -> E1 [style=invis];
+    }
+
+    subgraph cluster_2 {
+        style=invis;
+        P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+        E2 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+        P2 -> E2 [style=invis];
+    }
+
+    subgraph cluster_3 {
+        style=invis;
+        P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+        E3 [label=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+        P3 -> E3 [style=invis];
+    }
+
+    subgraph cluster_4 {
+        style=invis;
+        P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+        E4 [label=<<FONT POINT-SIZE="9">Исполнитель 3,<BR/>Исполнитель 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+        P4 -> E4 [style=invis];
+    }
+
+    // Process flow between clusters
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" ltail=cluster_1 lhead=cluster_2];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" ltail=cluster_2 lhead=cluster_3];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" ltail=cluster_3 lhead=cluster_4];
+}`;
+
+            renderTest('test3', viz, dot3);
+
+            // Test 4: TB with proper flow
+            const dot4 = `
+digraph VADGraph {
+    rankdir=TB;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=ortho;
+    nodesep=1.0;
+    ranksep=0.6;
+
+    // Process nodes (NOT bold)
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Executor nodes (yellow ellipse)
+    E1 [label=<<FONT POINT-SIZE="9">Исполнитель 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E2 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E3 [label=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E4 [label=<<FONT POINT-SIZE="9">Исполнитель 3,<BR/>Исполнитель 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+
+    // All processes on same horizontal row
+    { rank=same; P1 -> P2 -> P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee"]; }
+
+    // All executors on same row below
+    { rank=same; E1; E2; E3; E4; }
+
+    // Invisible vertical edges
+    P1 -> E1 [style=invis];
+    P2 -> E2 [style=invis];
+    P3 -> E3 [style=invis];
+    P4 -> E4 [style=invis];
+}`;
+
+            renderTest('test4', viz, dot4);
+
+            // Test 5: Single composite nodes using HTML table
+            const dot5 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+
+    // Composite nodes: CDS-like top + executor label bottom
+    // Using HTML TABLE with shaped cells
+    P1 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2" CELLPADDING="4">
+        <TR><TD BGCOLOR="#A5D6A7" STYLE="rounded" WIDTH="80" HEIGHT="40">Процесс 1</TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1</FONT></TD></TR>
+    </TABLE>> shape="none" margin="0"];
+
+    P2 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2" CELLPADDING="4">
+        <TR><TD BGCOLOR="#A5D6A7" STYLE="rounded" WIDTH="80" HEIGHT="40">Процесс 2</TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1,<BR/>Исполнитель 2</FONT></TD></TR>
+    </TABLE>> shape="none" margin="0"];
+
+    P3 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2" CELLPADDING="4">
+        <TR><TD BGCOLOR="#A5D6A7" STYLE="rounded" WIDTH="80" HEIGHT="40">Процесс 3</TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 3</FONT></TD></TR>
+    </TABLE>> shape="none" margin="0"];
+
+    P4 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2" CELLPADDING="4">
+        <TR><TD BGCOLOR="#A5D6A7" STYLE="rounded" WIDTH="80" HEIGHT="40">Процесс 4</TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 3,<BR/>Исполнитель 4</FONT></TD></TR>
+    </TABLE>> shape="none" margin="0"];
+
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee"];
+}`;
+
+            renderTest('test5', viz, dot5);
+        }
+
+        function renderTest(id, viz, dot) {
+            try {
+                document.getElementById(id).innerHTML = viz.renderSVGElement(dot).outerHTML;
+            } catch(e) {
+                document.getElementById(id).innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById(id).innerHTML += '<pre>' + dot + '</pre>';
+        }
+
+        runTests();
+    </script>
+</body>
+</html>

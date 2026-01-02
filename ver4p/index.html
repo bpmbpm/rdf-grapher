@@ -1191,9 +1191,9 @@ WHERE {
             },
             'ExecutorGroupStyle': {
                 types: ['vad:ExecutorGroup', 'http://example.org/vad#ExecutorGroup'],
-                dot: 'shape="box" height="0.5" width="1.2" color="#1565C0" fillcolor="#BBDEFB" fontname="Arial" fontsize="9" style="filled,rounded"',
+                dot: 'shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" fontsize="9" style="filled"',
                 label: 'Группа исполнителей (vad:ExecutorGroup)',
-                description: 'Группа исполнителей процесса'
+                description: 'Группа исполнителей процесса (эллипс с желтоватой заливкой)'
             },
             'ExecutorStyle': {
                 types: ['vad:Executor', 'http://example.org/vad#Executor'],
@@ -2241,16 +2241,17 @@ ex:organizations {
             });
 
             // Генерация DOT-кода
+            // Используем rankdir=TB чтобы rank=same группировал узлы горизонтально
+            // А процессы идут в одной строке благодаря rank=same
             let dot = 'digraph VADGraph {\n';
             dot += '    // VAD (Value Added Chain Diagram)\n';
-            dot += '    rankdir=LR;\n';
+            dot += '    rankdir=TB;\n';  // Top-to-bottom позволяет горизонтальное выравнивание через rank=same
             dot += '    node [fontname="Arial"];\n';
             dot += '    edge [fontname="Arial", fontsize=10];\n';
-            dot += '    splines=curved;\n';  // Изогнутые линии для VAD
+            dot += '    splines=ortho;\n';  // Прямоугольные линии лучше работают с TB направлением
+            dot += '    nodesep=0.8;\n';  // Расстояние между узлами
+            dot += '    ranksep=0.5;\n';  // Расстояние между рангами (CDS и ExecutorGroup)
             dot += '\n';
-
-            // Добавляем узлы процессов (только те, у которых нет hasParent или hasParent не виден)
-            dot += '    // Процессы VAD (cds shape с зеленой заливкой)\n';
 
             // Фильтруем процессы - показываем только те, которые не являются материнскими
             // (Process0 скрыт, потому что он не имеет hasNext и является родителем)
@@ -2265,14 +2266,39 @@ ex:organizations {
                 }
             });
 
-            // Собираем информацию о подписях исполнителей для каждого процесса
-            const processExecutorsLabels = new Map();  // nodeId -> executorsList
+            // Добавляем узлы процессов (CDS) и ExecutorGroup как отдельные узлы
+            dot += '    // Процессы VAD (cds shape) и ExecutorGroup (ellipse желтый)\n';
 
+            // Сначала добавляем все узлы CDS
             visibleProcesses.forEach((processInfo, uri) => {
                 const nodeId = generateNodeId(uri);
                 const processName = processInfo.name || processInfo.label;
 
-                // Получаем список исполнителей для подписи под фигурой
+                // Формируем HTML label с именем процесса (БЕЗ жирного шрифта)
+                const wrappedProcessName = wrapTextByWords(processName, currentMaxLabelLength);
+
+                let htmlLabel = '<';
+                for (let i = 0; i < wrappedProcessName.length; i++) {
+                    if (i > 0) htmlLabel += '<BR/>';
+                    htmlLabel += escapeHtmlLabel(wrappedProcessName[i]);
+                }
+                htmlLabel += '>';
+
+                // cds shape с зеленой заливкой
+                let nodeStyle = 'shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"';
+                dot += `    ${nodeId} [label=${htmlLabel} ${nodeStyle}];\n`;
+
+                nodeLabelToUri[processInfo.label] = { uri: uri, dotId: nodeId };
+            });
+
+            dot += '\n';
+
+            // Добавляем ExecutorGroup узлы (желтые эллипсы)
+            dot += '    // ExecutorGroup узлы (эллипсы с желтоватой заливкой)\n';
+            visibleProcesses.forEach((processInfo, uri) => {
+                const nodeId = generateNodeId(uri);
+
+                // Получаем список исполнителей
                 let executorsList = '';
                 if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
                     const group = executorGroups.get(processInfo.executorGroup);
@@ -2282,76 +2308,90 @@ ex:organizations {
                     executorsList = executorNamesList.join(', ');
                 }
 
-                // Сохраняем информацию об исполнителях для создания отдельных узлов подписей
                 if (executorsList) {
-                    processExecutorsLabels.set(nodeId, executorsList);
+                    const executorNodeId = `${nodeId}_exec`;
+                    const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
+
+                    let execLabel = '<<FONT POINT-SIZE="9">';
+                    for (let i = 0; i < wrappedExecutors.length; i++) {
+                        if (i > 0) execLabel += '<BR/>';
+                        execLabel += escapeHtmlLabel(wrappedExecutors[i]);
+                    }
+                    execLabel += '</FONT>>';
+
+                    // ExecutorGroup как эллипс с желтоватой заливкой
+                    dot += `    ${executorNodeId} [label=${execLabel} shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];\n`;
                 }
-
-                // Формируем HTML label только с именем процесса (исполнители будут в отдельном узле)
-                const wrappedProcessName = wrapTextByWords(processName, currentMaxLabelLength);
-
-                let htmlLabel = '<';
-                for (let i = 0; i < wrappedProcessName.length; i++) {
-                    if (i > 0) htmlLabel += '<BR/>';
-                    htmlLabel += `<B>${escapeHtmlLabel(wrappedProcessName[i])}</B>`;
-                }
-                htmlLabel += '>';
-
-                // cds shape с зеленой заливкой
-                let nodeStyle = 'shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"';
-
-                dot += `    ${nodeId} [label=${htmlLabel} ${nodeStyle}];\n`;
-                nodeLabelToUri[processInfo.label] = { uri: uri, dotId: nodeId };
             });
 
             dot += '\n';
 
-            // Добавляем отдельные узлы с подписями исполнителей (plaintext, без рамки)
-            // Эти узлы будут позиционированы под CDS-фигурами с помощью невидимых связей
-            if (processExecutorsLabels.size > 0) {
-                dot += '    // Подписи исполнителей (plaintext узлы под CDS-фигурами)\n';
+            // Собираем ID узлов для rank constraints
+            const cdsNodeIds = [];
+            const execNodeIds = [];
+            visibleProcesses.forEach((processInfo, uri) => {
+                const nodeId = generateNodeId(uri);
+                cdsNodeIds.push(nodeId);
 
-                processExecutorsLabels.forEach((executorsList, processNodeId) => {
-                    const labelNodeId = `${processNodeId}_label`;
-                    const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
-
-                    let labelHtml = '<<FONT POINT-SIZE="9" COLOR="#555555">';
-                    for (let i = 0; i < wrappedExecutors.length; i++) {
-                        if (i > 0) labelHtml += '<BR/>';
-                        labelHtml += escapeHtmlLabel(wrappedExecutors[i]);
+                if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
+                    const group = executorGroups.get(processInfo.executorGroup);
+                    if (group.executors.length > 0) {
+                        execNodeIds.push(`${nodeId}_exec`);
                     }
-                    labelHtml += '</FONT>>';
+                }
+            });
 
-                    dot += `    ${labelNodeId} [label=${labelHtml} shape="plaintext" fontname="Arial"];\n`;
-                });
-
-                dot += '\n';
-
-                // Добавляем невидимые связи от процессов к их подписям для позиционирования
-                dot += '    // Невидимые связи для позиционирования подписей под процессами\n';
-                processExecutorsLabels.forEach((executorsList, processNodeId) => {
-                    const labelNodeId = `${processNodeId}_label`;
-                    dot += `    ${processNodeId} -> ${labelNodeId} [style=invis];\n`;
-                });
-
+            // В режиме rankdir=TB, rank=same группирует узлы горизонтально
+            // ExecutorGroup узлы располагаются на следующем ранге (ниже CDS)
+            if (execNodeIds.length > 0) {
+                dot += '    // Все ExecutorGroup на одном уровне ниже (rank=same)\n';
+                dot += `    { rank=same; ${execNodeIds.join('; ')}; }\n`;
                 dot += '\n';
             }
 
-            // Добавляем ребра hasNext
-            dot += '    // Связи hasNext (восток -> запад)\n';
+            // Добавляем невидимые связи для позиционирования ExecutorGroup под соответствующим CDS
+            dot += '    // Невидимые связи для позиционирования ExecutorGroup под CDS\n';
+            visibleProcesses.forEach((processInfo, uri) => {
+                const nodeId = generateNodeId(uri);
 
+                let executorsList = '';
+                if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
+                    const group = executorGroups.get(processInfo.executorGroup);
+                    executorsList = group.executors.length > 0 ? 'has' : '';
+                }
+
+                if (executorsList) {
+                    const executorNodeId = `${nodeId}_exec`;
+                    // Невидимая связь для привязки executor к своему CDS
+                    dot += `    ${nodeId} -> ${executorNodeId} [style=invis weight=10];\n`;
+                }
+            });
+
+            dot += '\n';
+
+            // Добавляем ребра hasNext между процессами
+            // В режиме rankdir=TB, горизонтальные связи создаются через rank=same subgraph
+            dot += '    // Связи hasNext - горизонтальный поток процессов\n';
+            dot += '    { rank=same;\n';
+
+            // Сначала перечисляем все узлы CDS в subgraph с rank=same
+            cdsNodeIds.forEach(nodeId => {
+                dot += `        ${nodeId};\n`;
+            });
+
+            // Затем добавляем связи hasNext внутри этого subgraph
             hasNextEdges.forEach(edge => {
                 // Проверяем, что оба процесса видимы
                 if (visibleProcesses.has(edge.from) && visibleProcesses.has(edge.to)) {
                     const fromId = generateNodeId(edge.from);
                     const toId = generateNodeId(edge.to);
 
-                    // Направление: из востока (правая часть) в запад (левая часть)
-                    // Используем tailport и headport для указания портов
-                    // Изогнутые тонкие стрелки (penwidth=1)
-                    dot += `    ${fromId} -> ${toId} [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee" tailport="e" headport="w"];\n`;
+                    // В TB режиме горизонтальные стрелки
+                    dot += `        ${fromId} -> ${toId} [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee"];\n`;
                 }
             });
+
+            dot += '    }\n';
 
             dot += '}\n';
 
