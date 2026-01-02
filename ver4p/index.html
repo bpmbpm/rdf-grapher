@@ -1851,8 +1851,40 @@ vad:Process3 rdf:type vad:Process ;
 # Процесс 4
 vad:Process4 rdf:type vad:Process ;
     rdfs:label "Процесс 4" ;
-    dcterms:description "Заключительный процесс в цепочке" ;
+    dcterms:description "Четвёртый процесс в цепочке" ;
     vad:hasExecutor vad:ExecutorGroup4 ;
+    vad:hasParent vad:Process0 ;
+    vad:hasNext vad:Process5 .
+
+# Процесс 5
+vad:Process5 rdf:type vad:Process ;
+    rdfs:label "Процесс 5" ;
+    dcterms:description "Пятый процесс в цепочке" ;
+    vad:hasExecutor vad:ExecutorGroup5 ;
+    vad:hasParent vad:Process0 ;
+    vad:hasNext vad:Process6 .
+
+# Процесс 6
+vad:Process6 rdf:type vad:Process ;
+    rdfs:label "Процесс 6" ;
+    dcterms:description "Шестой процесс в цепочке" ;
+    vad:hasExecutor vad:ExecutorGroup6 ;
+    vad:hasParent vad:Process0 ;
+    vad:hasNext vad:Process7 .
+
+# Процесс 7
+vad:Process7 rdf:type vad:Process ;
+    rdfs:label "Процесс 7" ;
+    dcterms:description "Седьмой процесс в цепочке" ;
+    vad:hasExecutor vad:ExecutorGroup7 ;
+    vad:hasParent vad:Process0 ;
+    vad:hasNext vad:Process8 .
+
+# Процесс 8
+vad:Process8 rdf:type vad:Process ;
+    rdfs:label "Процесс 8" ;
+    dcterms:description "Заключительный процесс в цепочке" ;
+    vad:hasExecutor vad:ExecutorGroup8 ;
     vad:hasParent vad:Process0 .
 
 # Группы исполнителей
@@ -1872,6 +1904,22 @@ vad:ExecutorGroup4 rdf:type vad:ExecutorGroup ;
     rdfs:label "Группа исполнителей процесса Процесс 4" ;
     vad:includes vad:Executor3, vad:Executor4 .
 
+vad:ExecutorGroup5 rdf:type vad:ExecutorGroup ;
+    rdfs:label "Группа исполнителей процесса Процесс 5" ;
+    vad:includes vad:Executor5, vad:Executor6 .
+
+vad:ExecutorGroup6 rdf:type vad:ExecutorGroup ;
+    rdfs:label "Группа исполнителей процесса Процесс 6" ;
+    vad:includes vad:Executor7, vad:Executor8 .
+
+vad:ExecutorGroup7 rdf:type vad:ExecutorGroup ;
+    rdfs:label "Группа исполнителей процесса Процесс 7" ;
+    vad:includes vad:Executor1, vad:Executor5 .
+
+vad:ExecutorGroup8 rdf:type vad:ExecutorGroup ;
+    rdfs:label "Группа исполнителей процесса Процесс 8" ;
+    vad:includes vad:Executor2, vad:Executor7 .
+
 # Исполнители
 vad:Executor1 rdf:type vad:Executor ;
     rdfs:label "Исполнитель 1" .
@@ -1883,7 +1931,19 @@ vad:Executor3 rdf:type vad:Executor ;
     rdfs:label "Исполнитель 3" .
 
 vad:Executor4 rdf:type vad:Executor ;
-    rdfs:label "Исполнитель 4" .`;
+    rdfs:label "Исполнитель 4" .
+
+vad:Executor5 rdf:type vad:Executor ;
+    rdfs:label "Исполнитель 5" .
+
+vad:Executor6 rdf:type vad:Executor ;
+    rdfs:label "Исполнитель 6" .
+
+vad:Executor7 rdf:type vad:Executor ;
+    rdfs:label "Исполнитель 7" .
+
+vad:Executor8 rdf:type vad:Executor ;
+    rdfs:label "Исполнитель 8" .`;
 
             document.getElementById('rdf-input').value = exampleVAD;
             document.getElementById('input-format').value = 'turtle';
@@ -2187,7 +2247,6 @@ ex:organizations {
             dot += '    node [fontname="Arial"];\n';
             dot += '    edge [fontname="Arial", fontsize=10];\n';
             dot += '    splines=curved;\n';  // Изогнутые линии для VAD
-            dot += '    forcelabels=true;\n';  // Принудительное отображение xlabel
             dot += '\n';
 
             // Добавляем узлы процессов (только те, у которых нет hasParent или hasParent не виден)
@@ -2220,37 +2279,38 @@ ex:organizations {
                     executorsList = executorNamesList.join(', ');
                 }
 
-                // Формируем HTML-like label только с именем процесса
-                // Имя процесса с переносом по словам
+                // Формируем HTML TABLE label с именем процесса и исполнителями внутри
+                // Используем TABLE для правильного центрирования содержимого в CDS-фигуре
                 const wrappedProcessName = wrapTextByWords(processName, currentMaxLabelLength);
-                let htmlLabel = '<';
+
+                let htmlLabel = '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">';
 
                 // Добавляем имя процесса (жирным шрифтом)
+                htmlLabel += '<TR><TD>';
                 for (let i = 0; i < wrappedProcessName.length; i++) {
                     if (i > 0) htmlLabel += '<BR/>';
                     htmlLabel += `<B>${escapeHtmlLabel(wrappedProcessName[i])}</B>`;
                 }
+                htmlLabel += '</TD></TR>';
 
-                htmlLabel += '>';
+                // Добавляем исполнителей под именем процесса (если есть)
+                if (executorsList) {
+                    const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
+                    htmlLabel += '<TR><TD><FONT POINT-SIZE="9" COLOR="#555555">';
+                    for (let i = 0; i < wrappedExecutors.length; i++) {
+                        if (i > 0) htmlLabel += '<BR/>';
+                        htmlLabel += escapeHtmlLabel(wrappedExecutors[i]);
+                    }
+                    htmlLabel += '</FONT></TD></TR>';
+                }
+
+                htmlLabel += '</TABLE>>';
 
                 // cds shape с зеленой заливкой
                 // Убираем фиксированные размеры, чтобы узел мог адаптироваться под содержимое
                 let nodeStyle = 'shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"';
 
-                // Формируем xlabel для исполнителей (подпись под фигурой)
-                let xlabelAttr = '';
-                if (executorsList) {
-                    const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
-                    let xlabelHtml = '<';
-                    for (let i = 0; i < wrappedExecutors.length; i++) {
-                        if (i > 0) xlabelHtml += '<BR/>';
-                        xlabelHtml += `<FONT POINT-SIZE="9">${escapeHtmlLabel(wrappedExecutors[i])}</FONT>`;
-                    }
-                    xlabelHtml += '>';
-                    xlabelAttr = ` xlabel=${xlabelHtml}`;
-                }
-
-                dot += `    ${nodeId} [label=${htmlLabel} ${nodeStyle}${xlabelAttr}];\n`;
+                dot += `    ${nodeId} [label=${htmlLabel} ${nodeStyle}];\n`;
                 nodeLabelToUri[processInfo.label] = { uri: uri, dotId: nodeId };
             });
 
@@ -2934,7 +2994,7 @@ ex:organizations {
 
         /**
          * Открывает визуализацию в новом окне через GitHub Pages (без внешнего сервиса)
-         * Формирует URL с параметрами: rdf=данные&from=формат&to=формат
+         * Формирует URL с параметрами: rdf=данные&from=формат&to=формат&mode=режим
          * Аналогично работе LDF сервиса
          */
         function openInNewWindowGitHub() {
@@ -2942,6 +3002,7 @@ ex:organizations {
             const rdfInput = document.getElementById('rdf-input').value.trim();
             const inputFormat = document.getElementById('input-format').value;
             const outputFormat = document.getElementById('output-format').value;
+            const visualizationMode = document.getElementById('visualization-mode').value;
 
             // Проверяем, что данные введены
             if (!rdfInput) {
@@ -2964,8 +3025,8 @@ ex:organizations {
                 baseUrl = window.location.origin + window.location.pathname;
             }
 
-            // Формируем URL с параметрами
-            const serviceUrl = `${baseUrl}?rdf=${encodedRdf}&from=${fromFormat}&to=${outputFormat}`;
+            // Формируем URL с параметрами (включая mode для режима визуализации)
+            const serviceUrl = `${baseUrl}?rdf=${encodedRdf}&from=${fromFormat}&to=${outputFormat}&mode=${visualizationMode}`;
 
             // Открываем в новом окне
             window.open(serviceUrl, '_blank');
@@ -3193,9 +3254,96 @@ ex:organizations {
             document.getElementById('sparql-results').style.display = 'none';
         }
 
+        /**
+         * Парсит URL параметры и возвращает объект с параметрами
+         * Поддерживаемые параметры:
+         * - rdf: RDF данные (URL-encoded)
+         * - from: входной формат (ttl, nt, nq, trig)
+         * - to: выходной формат (svg, png)
+         * - mode: режим визуализации (notation, base, aggregation, vad)
+         *
+         * @returns {Object} - Объект с параметрами
+         */
+        function parseUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const params = {};
+
+            // Получаем RDF данные из параметра
+            if (urlParams.has('rdf')) {
+                params.rdf = urlParams.get('rdf');
+            }
+
+            // Получаем входной формат
+            if (urlParams.has('from')) {
+                const fromParam = urlParams.get('from');
+                // Маппинг обратный: параметры URL -> внутренние форматы
+                const reverseFormatMapping = {
+                    'ttl': 'turtle',
+                    'turtle': 'turtle',
+                    'nt': 'n-triples',
+                    'n-triples': 'n-triples',
+                    'nq': 'n-quads',
+                    'n-quads': 'n-quads',
+                    'trig': 'trig'
+                };
+                params.from = reverseFormatMapping[fromParam] || 'turtle';
+            }
+
+            // Получаем выходной формат
+            if (urlParams.has('to')) {
+                const toParam = urlParams.get('to');
+                if (toParam === 'png' || toParam === 'svg') {
+                    params.to = toParam;
+                }
+            }
+
+            // Получаем режим визуализации
+            if (urlParams.has('mode')) {
+                const modeParam = urlParams.get('mode');
+                const validModes = ['notation', 'base', 'aggregation', 'vad'];
+                if (validModes.includes(modeParam)) {
+                    params.mode = modeParam;
+                }
+            }
+
+            return params;
+        }
+
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', function() {
             updateModeDescription();
+
+            // Парсим URL параметры
+            const params = parseUrlParams();
+
+            // Если есть RDF данные в URL, заполняем форму и визуализируем
+            if (params.rdf) {
+                console.log('Обнаружены RDF данные в URL, загружаем...');
+
+                // Заполняем текстовое поле RDF данными
+                document.getElementById('rdf-input').value = params.rdf;
+
+                // Устанавливаем входной формат, если указан
+                if (params.from) {
+                    document.getElementById('input-format').value = params.from;
+                }
+
+                // Устанавливаем выходной формат, если указан
+                if (params.to) {
+                    document.getElementById('output-format').value = params.to;
+                }
+
+                // Устанавливаем режим визуализации, если указан
+                if (params.mode) {
+                    document.getElementById('visualization-mode').value = params.mode;
+                    updateModeDescription();
+                }
+
+                // Небольшая задержка для уверенности, что все элементы загружены
+                setTimeout(function() {
+                    visualize();
+                }, 100);
+            }
         });
     </script>
 </body>
