@@ -834,6 +834,9 @@
         <div class="export-buttons" id="export-buttons" style="display: none;">
             <button onclick="downloadSVG()">Скачать SVG</button>
             <button onclick="downloadPNG()">Скачать PNG</button>
+            <button onclick="openInNewWindowGitHub()">Показать в окне github</button>
+            <button onclick="openInNewWindowLdfFi()">Показать в окне ldf.fi</button>
+            <button onclick="openInNewWindowGraphvizOnline()">Показать в окне GraphvizOnline</button>
         </div>
         <div class="legend-panel" id="legend-panel" style="display: none;">
             <h3>Легенда стилей:</h3>
@@ -1298,6 +1301,7 @@ WHERE {
         let dragOffsetY = 0;
         let currentStore = null;
         let comunicaEngine = null;
+        let currentDotCode = '';
 
         const defaultSparqlQuery = `SELECT ?s ?p ?o
 WHERE {
@@ -1754,6 +1758,7 @@ WHERE {
                 });
 
                 const dotCode = rdfToDot(filteredQuads, currentPrefixes);
+                currentDotCode = dotCode;
                 console.log('Пересгенерированный DOT-код:', dotCode);
 
                 const viz = await Viz.instance();
@@ -2181,7 +2186,8 @@ ex:organizations {
             dot += '    rankdir=LR;\n';
             dot += '    node [fontname="Arial"];\n';
             dot += '    edge [fontname="Arial", fontsize=10];\n';
-            dot += '    splines=ortho;\n';  // Ортогональные линии для VAD
+            dot += '    splines=curved;\n';  // Изогнутые линии для VAD
+            dot += '    forcelabels=true;\n';  // Принудительное отображение xlabel
             dot += '\n';
 
             // Добавляем узлы процессов (только те, у которых нет hasParent или hasParent не виден)
@@ -2204,7 +2210,7 @@ ex:organizations {
                 const nodeId = generateNodeId(uri);
                 const processName = processInfo.name || processInfo.label;
 
-                // Получаем список исполнителей для подписи под именем процесса
+                // Получаем список исполнителей для подписи под фигурой (xlabel)
                 let executorsList = '';
                 if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
                     const group = executorGroups.get(processInfo.executorGroup);
@@ -2214,7 +2220,7 @@ ex:organizations {
                     executorsList = executorNamesList.join(', ');
                 }
 
-                // Формируем HTML-like label с переносом строк
+                // Формируем HTML-like label только с именем процесса
                 // Имя процесса с переносом по словам
                 const wrappedProcessName = wrapTextByWords(processName, currentMaxLabelLength);
                 let htmlLabel = '<';
@@ -2225,24 +2231,26 @@ ex:organizations {
                     htmlLabel += `<B>${escapeHtmlLabel(wrappedProcessName[i])}</B>`;
                 }
 
-                // Если есть исполнители, добавляем их под именем процесса
-                // Применяем перенос строки при длинных подписях
-                if (executorsList) {
-                    const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
-                    htmlLabel += '<BR/>';
-                    for (let i = 0; i < wrappedExecutors.length; i++) {
-                        if (i > 0) htmlLabel += '<BR/>';
-                        htmlLabel += `<FONT POINT-SIZE="9">${escapeHtmlLabel(wrappedExecutors[i])}</FONT>`;
-                    }
-                }
-
                 htmlLabel += '>';
 
                 // cds shape с зеленой заливкой
                 // Убираем фиксированные размеры, чтобы узел мог адаптироваться под содержимое
                 let nodeStyle = 'shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"';
 
-                dot += `    ${nodeId} [label=${htmlLabel} ${nodeStyle}];\n`;
+                // Формируем xlabel для исполнителей (подпись под фигурой)
+                let xlabelAttr = '';
+                if (executorsList) {
+                    const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
+                    let xlabelHtml = '<';
+                    for (let i = 0; i < wrappedExecutors.length; i++) {
+                        if (i > 0) xlabelHtml += '<BR/>';
+                        xlabelHtml += `<FONT POINT-SIZE="9">${escapeHtmlLabel(wrappedExecutors[i])}</FONT>`;
+                    }
+                    xlabelHtml += '>';
+                    xlabelAttr = ` xlabel=${xlabelHtml}`;
+                }
+
+                dot += `    ${nodeId} [label=${htmlLabel} ${nodeStyle}${xlabelAttr}];\n`;
                 nodeLabelToUri[processInfo.label] = { uri: uri, dotId: nodeId };
             });
 
@@ -2259,7 +2267,8 @@ ex:organizations {
 
                     // Направление: из востока (правая часть) в запад (левая часть)
                     // Используем tailport и headport для указания портов
-                    dot += `    ${fromId} -> ${toId} [color="#2E7D32" penwidth="2" style="solid" arrowhead="vee" tailport="e" headport="w"];\n`;
+                    // Изогнутые тонкие стрелки (penwidth=1)
+                    dot += `    ${fromId} -> ${toId} [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee" tailport="e" headport="w"];\n`;
                 }
             });
 
@@ -2741,6 +2750,7 @@ ex:organizations {
                 });
 
                 const dotCode = rdfToDot(filteredQuads, prefixes);
+                currentDotCode = dotCode;
                 console.log('Сгенерированный DOT-код:', dotCode);
 
                 const viz = await Viz.instance();
@@ -2881,6 +2891,105 @@ ex:organizations {
                 console.error('Ошибка при скачивании PNG:', error);
                 alert('Ошибка при создании PNG файла');
             }
+        }
+
+        /**
+         * Маппинг внутренних форматов на сокращенные имена для URL
+         */
+        const formatMapping = {
+            'turtle': 'ttl',
+            'n-triples': 'nt',
+            'n-quads': 'nq',
+            'trig': 'trig'
+        };
+
+        /**
+         * Открывает визуализацию в новом окне через внешний LDF сервис
+         * Формирует URL с параметрами: rdf=данные&from=формат&to=png
+         */
+        function openInNewWindowLdfFi() {
+            // Получаем входные данные
+            const rdfInput = document.getElementById('rdf-input').value.trim();
+            const inputFormat = document.getElementById('input-format').value;
+
+            // Проверяем, что данные введены
+            if (!rdfInput) {
+                alert('Пожалуйста, введите RDF данные');
+                return;
+            }
+
+            // Получаем формат для параметра URL
+            const fromFormat = formatMapping[inputFormat] || 'ttl';
+
+            // Кодируем RDF данные для URL
+            // Заменяем пробелы на + для совместимости с LDF сервисом
+            const encodedRdf = encodeURIComponent(rdfInput).replace(/%20/g, '+');
+
+            // Формируем URL для внешнего сервиса
+            const serviceUrl = `https://www.ldf.fi/service/rdf-grapher?rdf=${encodedRdf}&from=${fromFormat}&to=png`;
+
+            // Открываем в новом окне
+            window.open(serviceUrl, '_blank');
+        }
+
+        /**
+         * Открывает визуализацию в новом окне через GitHub Pages (без внешнего сервиса)
+         * Формирует URL с параметрами: rdf=данные&from=формат&to=формат
+         * Аналогично работе LDF сервиса
+         */
+        function openInNewWindowGitHub() {
+            // Получаем входные данные
+            const rdfInput = document.getElementById('rdf-input').value.trim();
+            const inputFormat = document.getElementById('input-format').value;
+            const outputFormat = document.getElementById('output-format').value;
+
+            // Проверяем, что данные введены
+            if (!rdfInput) {
+                alert('Пожалуйста, введите RDF данные');
+                return;
+            }
+
+            // Получаем формат для параметра URL
+            const fromFormat = formatMapping[inputFormat] || 'ttl';
+
+            // Кодируем RDF данные для URL
+            const encodedRdf = encodeURIComponent(rdfInput).replace(/%20/g, '+');
+
+            // Определяем базовый URL для GitHub Pages
+            let baseUrl;
+            if (window.location.hostname === 'bpmbpm.github.io') {
+                baseUrl = 'https://bpmbpm.github.io/rdf-grapher/ver4p/';
+            } else {
+                // Для локального тестирования используем текущий путь
+                baseUrl = window.location.origin + window.location.pathname;
+            }
+
+            // Формируем URL с параметрами
+            const serviceUrl = `${baseUrl}?rdf=${encodedRdf}&from=${fromFormat}&to=${outputFormat}`;
+
+            // Открываем в новом окне
+            window.open(serviceUrl, '_blank');
+        }
+
+        /**
+         * Открывает DOT-код в GraphvizOnline для интерактивного редактирования
+         * Использует хеш URL для передачи DOT-кода
+         */
+        function openInNewWindowGraphvizOnline() {
+            // Проверяем, что DOT-код был сгенерирован
+            if (!currentDotCode) {
+                alert('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            // Кодируем DOT-код для URL
+            const encodedDot = encodeURIComponent(currentDotCode);
+
+            // Формируем URL с DOT-кодом в хеше
+            const graphvizUrl = `https://dreampuf.github.io/GraphvizOnline/#${encodedDot}`;
+
+            // Открываем в новом окне
+            window.open(graphvizUrl, '_blank');
         }
 
         // ============================================================================
