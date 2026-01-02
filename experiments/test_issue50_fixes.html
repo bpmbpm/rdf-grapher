@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Issue 50 Fixes - VAD CDS alignment and labels</title>
+    <script src="https://unpkg.com/@viz-js/viz@3.4.0/lib/viz-standalone.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { margin: 20px 0; border: 1px solid #ccc; padding: 15px; }
+        h2 { color: #333; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; font-size: 11px; }
+        .issue { color: red; }
+        .fix { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Issue 50 Fixes Testing</h1>
+    <p>Testing fixes for:</p>
+    <ul>
+        <li class="issue">CDS nodes are not aligned horizontally (stair-step pattern)</li>
+        <li class="issue">Executor labels are shifted down and to the right</li>
+        <li class="issue">Process names should NOT be bold</li>
+        <li class="issue">ExecutorGroup should be ellipse with yellow fill</li>
+    </ul>
+
+    <div class="test">
+        <h2>Test 1: Current Implementation (showing issues)</h2>
+        <p>Shows the current stair-step pattern and shifted labels</p>
+        <div id="test1"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 2: Fix - rank=same for CDS processes, labels positioned correctly</h2>
+        <p class="fix">Using rank=same subgraph to keep all CDS on same horizontal level,
+        and separate rank=same subgraph for labels directly below their CDS.</p>
+        <div id="test2"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 3: Fix - Yellow ellipse ExecutorGroup nodes under CDS</h2>
+        <p class="fix">ExecutorGroup displayed as ellipse with yellow (#FFFFCC) fill,
+        positioned below corresponding CDS using rank=same.</p>
+        <div id="test3"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 4: Full fix with all requirements</h2>
+        <p class="fix">All fixes combined:</p>
+        <ul>
+            <li>CDS aligned horizontally (rank=same)</li>
+            <li>Process names NOT bold</li>
+            <li>ExecutorGroup as yellow ellipse below CDS</li>
+            <li>Labels properly positioned under their CDS</li>
+        </ul>
+        <div id="test4"></div>
+    </div>
+
+    <script>
+        async function runTests() {
+            const viz = await Viz.instance();
+
+            // Test 1: Current implementation (with issues)
+            const dot1 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+
+    // Process nodes (current implementation)
+    P1 [label=<<B>Процесс 1</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<<B>Процесс 2</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<<B>Процесс 3</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<<B>Процесс 4</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Label nodes (current - causes stair-step due to invisible edges)
+    P1_label [label=<<FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1</FONT>> shape="plaintext" fontname="Arial"];
+    P2_label [label=<<FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="plaintext" fontname="Arial"];
+    P3_label [label=<<FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 3</FONT>> shape="plaintext" fontname="Arial"];
+    P4_label [label=<<FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 3,<BR/>Исполнитель 4</FONT>> shape="plaintext" fontname="Arial"];
+
+    // Invisible edges for positioning (current - causes stair-step)
+    P1 -> P1_label [style=invis];
+    P2 -> P2_label [style=invis];
+    P3 -> P3_label [style=invis];
+    P4 -> P4_label [style=invis];
+
+    // Process flow
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+
+            try {
+                document.getElementById('test1').innerHTML = viz.renderSVGElement(dot1).outerHTML;
+            } catch(e) {
+                document.getElementById('test1').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test1').innerHTML += '<pre>' + dot1 + '</pre>';
+
+            // Test 2: Fix with rank=same for horizontal alignment
+            const dot2 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    newrank=true;
+
+    // Process nodes (NOT bold)
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Executor group nodes (yellow ellipse)
+    E1 [label=<<FONT POINT-SIZE="9">Исполнитель 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E2 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E3 [label=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    E4 [label=<<FONT POINT-SIZE="9">Исполнитель 3,<BR/>Исполнитель 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+
+    // Use rank=same to keep all CDS processes on the same horizontal level
+    { rank=same; P1; P2; P3; P4; }
+
+    // Use rank=same to keep all executor labels on the same level below
+    { rank=same; E1; E2; E3; E4; }
+
+    // Invisible edges to connect each CDS to its executor label (vertical)
+    P1 -> E1 [style=invis weight=10];
+    P2 -> E2 [style=invis weight=10];
+    P3 -> E3 [style=invis weight=10];
+    P4 -> E4 [style=invis weight=10];
+
+    // Process flow
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+
+            try {
+                document.getElementById('test2').innerHTML = viz.renderSVGElement(dot2).outerHTML;
+            } catch(e) {
+                document.getElementById('test2').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test2').innerHTML += '<pre>' + dot2 + '</pre>';
+
+            // Test 3: Yellow ellipse ExecutorGroup
+            const dot3 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    newrank=true;
+
+    // Process nodes
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Executor group as ellipse with yellow fill (like VAD spec)
+    EG1 [label=<<FONT POINT-SIZE="9">Исполнитель 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    EG2 [label=<<FONT POINT-SIZE="9">Исполнитель 2,<BR/>Исполнитель 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+
+    // Same rank for processes
+    { rank=same; P1; P2; }
+
+    // Same rank for executor groups
+    { rank=same; EG1; EG2; }
+
+    // Connect CDS to executor group below
+    P1 -> EG1 [style=invis weight=10];
+    P2 -> EG2 [style=invis weight=10];
+
+    // Process flow
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+
+            try {
+                document.getElementById('test3').innerHTML = viz.renderSVGElement(dot3).outerHTML;
+            } catch(e) {
+                document.getElementById('test3').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test3').innerHTML += '<pre>' + dot3 + '</pre>';
+
+            // Test 4: Full fix with all 8 processes
+            const dot4 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    newrank=true;
+
+    // Process nodes (NOT bold, just regular text)
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P5 [label=<Процесс 5> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P6 [label=<Процесс 6> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P7 [label=<Процесс 7> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P8 [label=<Процесс 8> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // ExecutorGroup nodes (ellipse with yellow fill)
+    EG1 [label=<<FONT POINT-SIZE="9">Исполнитель 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    EG2 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    EG3 [label=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    EG4 [label=<<FONT POINT-SIZE="9">Исполнитель 3,<BR/>Исполнитель 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    EG5 [label=<<FONT POINT-SIZE="9">Исполнитель 5,<BR/>Исполнитель 6</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    EG6 [label=<<FONT POINT-SIZE="9">Исполнитель 7,<BR/>Исполнитель 8</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    EG7 [label=<<FONT POINT-SIZE="9">Исполнитель 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+    EG8 [label=<<FONT POINT-SIZE="9">Исполнитель 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];
+
+    // Rank constraints to keep all processes on same horizontal level
+    { rank=same; P1; P2; P3; P4; P5; P6; P7; P8; }
+
+    // Rank constraints to keep all executor groups on same level below
+    { rank=same; EG1; EG2; EG3; EG4; EG5; EG6; EG7; EG8; }
+
+    // Invisible edges to position executor groups below their CDS
+    P1 -> EG1 [style=invis weight=10];
+    P2 -> EG2 [style=invis weight=10];
+    P3 -> EG3 [style=invis weight=10];
+    P4 -> EG4 [style=invis weight=10];
+    P5 -> EG5 [style=invis weight=10];
+    P6 -> EG6 [style=invis weight=10];
+    P7 -> EG7 [style=invis weight=10];
+    P8 -> EG8 [style=invis weight=10];
+
+    // Process flow edges
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P4 -> P5 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P5 -> P6 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P6 -> P7 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P7 -> P8 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+
+            try {
+                document.getElementById('test4').innerHTML = viz.renderSVGElement(dot4).outerHTML;
+            } catch(e) {
+                document.getElementById('test4').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test4').innerHTML += '<pre>' + dot4 + '</pre>';
+        }
+
+        runTests();
+    </script>
+</body>
+</html>
