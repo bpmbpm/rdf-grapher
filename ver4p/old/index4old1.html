@@ -1,0 +1,3202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDF Grapher ver4p - Визуализация RDF данных с режимом VAD</title>
+
+    <!--
+        RDF Grapher ver4p - Сервис для парсинга RDF данных и их визуализации в виде графа
+
+        Новые возможности ver4p:
+        - Режим VAD (Value Added Chain Diagram): процессы отображаются как cds-фигуры
+        - Поддержка исполнителей процессов через ExecutorGroup
+        - Валидация VAD-данных на соответствие разрешенным типам и предикатам
+        - Специальные стили для VAD элементов
+        - Связи hasNext между процессами с направлением восток-запад
+
+        Этот сервис является аналогом https://www.ldf.fi/service/rdf-grapher
+        Использует клиентские JavaScript библиотеки:
+        - N3.js для парсинга RDF (замена Redland Raptor)
+        - Viz.js для рендеринга графов (замена Graphviz)
+
+        Сервис работает полностью на стороне клиента и может быть размещен на GitHub Pages
+    -->
+
+    <!-- Стили для интерфейса -->
+    <style>
+        /* Основные стили страницы */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+
+        .description {
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+
+        .format-selectors {
+            display: flex;
+            gap: 20px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            background-color: white;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 15px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .result-container {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        #output {
+            text-align: center;
+            display: inline-block;
+        }
+
+        #output svg {
+            height: auto;
+        }
+
+        .error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .validation-error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            white-space: pre-wrap;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .export-buttons {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .export-buttons button {
+            margin: 5px;
+            background-color: #2196F3;
+        }
+
+        .export-buttons button:hover {
+            background-color: #1976D2;
+        }
+
+        .zoom-container {
+            position: relative;
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            min-height: 300px;
+            max-height: 70vh;
+        }
+
+        .zoom-content {
+            transform-origin: top left;
+            transition: transform 0.2s ease;
+        }
+
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .zoom-controls button {
+            padding: 8px 15px;
+            margin: 0;
+            font-size: 14px;
+            background-color: #607D8B;
+        }
+
+        .zoom-controls button:hover {
+            background-color: #455A64;
+        }
+
+        .zoom-controls span {
+            min-width: 60px;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .tech-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff3e0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        a {
+            color: #1976D2;
+        }
+
+        .example-link {
+            color: #4CAF50;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .example-link:hover {
+            color: #45a049;
+        }
+
+        .prefixes-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .prefixes-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .prefixes-content {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .prefix-line {
+            margin: 2px 0;
+        }
+
+        .prefix-name {
+            color: #6a1b9a;
+            font-weight: bold;
+        }
+
+        .prefix-url {
+            color: #1976D2;
+            text-decoration: none;
+        }
+
+        .prefix-url:hover {
+            text-decoration: underline;
+        }
+
+        .legend-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .legend-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .legend-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .legend-section {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .legend-section h4 {
+            margin: 0 0 8px 0;
+            color: #555;
+            font-size: 13px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 5px 0;
+            font-size: 12px;
+        }
+
+        .legend-shape {
+            width: 30px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid;
+            font-size: 10px;
+        }
+
+        .legend-line {
+            width: 40px;
+            height: 3px;
+            display: inline-block;
+        }
+
+        .legend-label {
+            color: #333;
+        }
+
+        .properties-panel {
+            position: fixed;
+            right: 20px;
+            top: 100px;
+            width: 350px;
+            max-height: 70vh;
+            background-color: white;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            resize: both;
+            min-width: 280px;
+            min-height: 200px;
+        }
+
+        .properties-panel.visible {
+            display: flex;
+        }
+
+        #properties-panels-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        #properties-panels-container .properties-panel {
+            pointer-events: auto;
+        }
+
+        .properties-header {
+            padding: 15px;
+            background-color: #4CAF50;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            user-select: none;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .properties-header h3 {
+            margin: 0;
+            font-size: 14px;
+            word-break: break-all;
+            flex: 1;
+            padding-right: 10px;
+        }
+
+        .properties-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0 5px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .properties-close-btn:hover {
+            opacity: 0.8;
+        }
+
+        .mode-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+            padding: 10px 15px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+
+        .mode-selector label {
+            margin: 0;
+            font-weight: normal;
+        }
+
+        .mode-selector select {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .mode-description {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .sparql-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .sparql-panel.visible {
+            display: block;
+        }
+
+        .sparql-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .sparql-query-textarea {
+            width: 100%;
+            height: 120px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            resize: vertical;
+            margin-bottom: 10px;
+        }
+
+        .sparql-query-textarea:focus {
+            outline: none;
+            border-color: #9C27B0;
+            box-shadow: 0 0 5px rgba(156, 39, 176, 0.3);
+        }
+
+        .sparql-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .sparql-buttons button {
+            background-color: #9C27B0;
+            margin-top: 0;
+        }
+
+        .sparql-buttons button:hover {
+            background-color: #7B1FA2;
+        }
+
+        .sparql-results {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow: auto;
+        }
+
+        .sparql-results h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 13px;
+        }
+
+        .sparql-results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .sparql-results-table th {
+            background-color: #9C27B0;
+            color: white;
+            padding: 8px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .sparql-results-table td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            word-break: break-all;
+        }
+
+        .sparql-results-table tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .sparql-results-table .uri {
+            color: #1976D2;
+        }
+
+        .sparql-results-table .literal {
+            color: #6a1b9a;
+        }
+
+        .sparql-error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .sparql-loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .properties-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .property-item {
+            margin-bottom: 12px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 3px solid #4CAF50;
+        }
+
+        .property-predicate {
+            color: #1976D2;
+            font-weight: bold;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .property-value {
+            color: #333;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        .property-value.literal {
+            color: #6a1b9a;
+        }
+
+        .property-value.uri {
+            color: #1976D2;
+        }
+
+        .properties-empty {
+            color: #666;
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .properties-type-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        #output svg .node {
+            cursor: pointer;
+        }
+
+        #output svg .node:hover {
+            opacity: 0.8;
+        }
+
+        #output svg .node.selected polygon,
+        #output svg .node.selected ellipse,
+        #output svg .node.selected path {
+            stroke-width: 3;
+            stroke: #FF5722;
+        }
+
+        .filter-panel {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #fff8e1;
+            border: 1px solid #ffcc02;
+            border-radius: 8px;
+        }
+
+        .filter-panel h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .filter-controls button {
+            padding: 6px 12px;
+            font-size: 12px;
+            margin-top: 0;
+            background-color: #FFA000;
+        }
+
+        .filter-controls button:hover {
+            background-color: #FF8F00;
+        }
+
+        .filter-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .filter-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .filter-item label {
+            margin: 0;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        .sparql-results-table tr.clickable {
+            cursor: pointer;
+        }
+
+        .sparql-results-table tr.clickable:hover {
+            background-color: #e3f2fd !important;
+        }
+
+        .sparql-results-table tr.highlighted {
+            background-color: #fff3e0 !important;
+            outline: 2px solid #FF5722;
+        }
+    </style>
+</head>
+<body>
+    <!-- Контейнер для панелей свойств узлов -->
+    <div id="properties-panels-container"></div>
+
+    <h1>RDF Grapher ver4p</h1>
+
+    <div class="description">
+        <p>
+            <strong>RDF Grapher ver4p</strong> — сервис для парсинга RDF данных и их визуализации в виде графа
+            с поддержкой режима VAD (Value Added Chain Diagram).
+            Этот сервис является расширенным аналогом <a href="https://www.ldf.fi/service/rdf-grapher" target="_blank">LDF RDF Grapher</a>.
+        </p>
+        <p>
+            <strong>Новые возможности ver4p:</strong>
+            <ul>
+                <li><strong>Режим VAD:</strong> визуализация цепочки добавленной стоимости с процессами и исполнителями</li>
+                <li>Процессы отображаются как cds-фигуры (chevron) с зеленой заливкой</li>
+                <li>Исполнители процессов показываются как подписи под процессами</li>
+                <li>Валидация данных на соответствие схеме VAD</li>
+            </ul>
+        </p>
+        <p>
+            <strong>Загрузить пример RDF данных:</strong>
+            <span class="example-link" onclick="loadExampleTurtle()">Turtle</span> |
+            <span class="example-link" onclick="loadExampleVAD()">Turtle VAD</span> |
+            <span class="example-link" onclick="loadExampleNTriples()">N-Triples</span> |
+            <span class="example-link" onclick="loadExampleNQuads()">N-Quads</span> |
+            <span class="example-link" onclick="loadExampleTriG()">TriG</span>
+        </p>
+    </div>
+
+    <div class="container">
+        <label for="rdf-input">RDF данные или URI:</label>
+        <textarea id="rdf-input" placeholder="Введите RDF данные в формате Turtle, N-Triples, N-Quads или TriG..."></textarea>
+
+        <div class="format-selectors">
+            <div class="form-group">
+                <label for="input-format">Входной формат:</label>
+                <select id="input-format">
+                    <option value="turtle" selected>Turtle</option>
+                    <option value="n-triples">N-Triples</option>
+                    <option value="n-quads">N-Quads</option>
+                    <option value="trig">TriG</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="output-format">Выходной формат:</label>
+                <select id="output-format">
+                    <option value="svg" selected>SVG</option>
+                    <option value="png">PNG</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="layout-engine">Движок компоновки:</label>
+                <select id="layout-engine">
+                    <option value="dot" selected>dot (иерархическая)</option>
+                    <option value="neato">neato (spring model)</option>
+                    <option value="fdp">fdp (force-directed)</option>
+                    <option value="circo">circo (круговая)</option>
+                    <option value="twopi">twopi (радиальная)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="visualization-mode">Режим визуализации:</label>
+                <select id="visualization-mode" onchange="updateModeDescription()">
+                    <option value="notation" selected>Режим нотации</option>
+                    <option value="base">Базовый режим</option>
+                    <option value="aggregation">Режим агрегации</option>
+                    <option value="vad">Режим VAD</option>
+                </select>
+                <div class="mode-description" id="mode-description">
+                    С выделением типов объектов и предикатов цветом и формами
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="sparql-mode">Режим SPARQL:</label>
+                <select id="sparql-mode" onchange="toggleSparqlPanel()">
+                    <option value="no" selected>No</option>
+                    <option value="yes">Yes</option>
+                </select>
+                <div class="mode-description" id="sparql-mode-description">
+                    Включите для выполнения SPARQL запросов к графу
+                </div>
+            </div>
+
+            <div class="form-group" id="max-label-length-group">
+                <label for="max-label-length">Макс. длина имени:</label>
+                <input type="number" id="max-label-length" value="25" min="5" max="200" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                <div class="mode-description" id="max-label-length-description">
+                    Перенос по словам при превышении
+                </div>
+            </div>
+        </div>
+
+        <button id="visualize-btn" onclick="visualize()">Визуализировать</button>
+    </div>
+
+    <div class="result-container" id="result-container">
+        <h2>Результат:</h2>
+        <div class="zoom-controls" id="zoom-controls" style="display: none;">
+            <button onclick="zoomOut()">-</button>
+            <span id="zoom-level">100%</span>
+            <button onclick="zoomIn()">+</button>
+            <button onclick="zoomReset()">Сброс</button>
+            <button onclick="zoomFit()">Вписать</button>
+        </div>
+        <div class="zoom-container" id="zoom-container">
+            <div class="zoom-content" id="zoom-content">
+                <div id="output"></div>
+            </div>
+        </div>
+        <div class="export-buttons" id="export-buttons" style="display: none;">
+            <button onclick="downloadSVG()">Скачать SVG</button>
+            <button onclick="downloadPNG()">Скачать PNG</button>
+            <button onclick="openInNewWindowGitHub()">Показать в окне github</button>
+            <button onclick="openInNewWindowLdfFi()">Показать в окне ldf.fi</button>
+            <button onclick="openInNewWindowGraphvizOnline()">Показать в окне GraphvizOnline</button>
+        </div>
+        <div class="legend-panel" id="legend-panel" style="display: none;">
+            <h3>Легенда стилей:</h3>
+            <div class="legend-content" id="legend-content"></div>
+        </div>
+        <div class="prefixes-panel" id="prefixes-panel" style="display: none;">
+            <h3>Prefixes:</h3>
+            <div class="prefixes-content" id="prefixes-content"></div>
+        </div>
+        <div class="sparql-panel" id="sparql-panel">
+            <h3>SPARQL запрос:</h3>
+            <textarea class="sparql-query-textarea" id="sparql-query" placeholder="Введите SPARQL запрос...">SELECT ?s ?p ?o
+WHERE {
+    ?s ?p ?o .
+}</textarea>
+            <div class="sparql-buttons">
+                <button onclick="executeSparqlQuery()">Выполнить запрос</button>
+                <button onclick="resetSparqlQuery()">Сбросить</button>
+            </div>
+            <div class="sparql-results" id="sparql-results" style="display: none;">
+                <h4>Результаты запроса:</h4>
+                <div id="sparql-results-content"></div>
+            </div>
+        </div>
+        <div class="filter-panel" id="filter-panel" style="display: none;">
+            <h3>Фильтры типов:</h3>
+            <div class="filter-controls">
+                <button onclick="selectAllFilters()">Выделить все</button>
+                <button onclick="deselectAllFilters()">Снять все</button>
+            </div>
+            <div class="filter-content" id="filter-content"></div>
+        </div>
+    </div>
+
+    <div class="tech-info">
+        <h3>Используемые технологии:</h3>
+        <ul>
+            <li>
+                <strong>N3.js</strong> — JavaScript библиотека для парсинга RDF
+                — <a href="https://github.com/rdfjs/N3.js" target="_blank">GitHub</a>
+            </li>
+            <li>
+                <strong>Viz.js</strong> — WebAssembly версия
+                <a href="http://graphviz.org/" target="_blank">Graphviz</a> для браузера
+                — <a href="https://github.com/mdaines/viz-js" target="_blank">GitHub</a>
+            </li>
+        </ul>
+        <p>
+            Этот сервис работает полностью на стороне клиента (в браузере)
+            и не требует серверной части, что позволяет размещать его на GitHub Pages.
+        </p>
+        <p>
+            <strong>Онтология VAD:</strong> <a href="ontology.md" target="_blank">ontology.md</a>
+        </p>
+    </div>
+
+    <!-- Подключение библиотеки N3.js для парсинга RDF -->
+    <script src="https://unpkg.com/n3@1.17.2/browser/n3.min.js"></script>
+
+    <!-- Подключение библиотеки Viz.js для рендеринга графов -->
+    <script src="https://unpkg.com/@viz-js/viz@3.4.0/lib/viz-standalone.js"></script>
+
+    <!-- Подключение библиотеки Comunica для SPARQL запросов -->
+    <script src="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql-rdfjs/comunica-browser.js"></script>
+
+    <script>
+        /**
+         * RDF Grapher ver4p - Основной JavaScript модуль
+         */
+
+        // ============================================================================
+        // РЕЖИМ ВИЗУАЛИЗАЦИИ
+        // ============================================================================
+
+        const Mode = 'notation';
+
+        // ============================================================================
+        // КОНФИГУРАЦИЯ ФИЛЬТРОВ
+        // ============================================================================
+
+        const Filter = {
+            hiddenPredicates: [
+                'rdf:type',
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                'rdfs:subClassOf',
+                'http://www.w3.org/2000/01/rdf-schema#subClassOf'
+            ]
+        };
+
+        const FilterBase = {
+            hiddenPredicates: []
+        };
+
+        const FilterAggregation = {
+            hiddenPredicates: [
+                'rdf:type',
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                'rdfs:subClassOf',
+                'http://www.w3.org/2000/01/rdf-schema#subClassOf'
+            ]
+        };
+
+        // Фильтры для режима VAD - скрываем hasParent и rdf:type
+        const FilterVAD = {
+            hiddenPredicates: [
+                'rdf:type',
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                'vad:hasParent',
+                'http://example.org/vad#hasParent'
+            ]
+        };
+
+        function getFilterConfig(mode) {
+            if (mode === 'base') {
+                return FilterBase;
+            } else if (mode === 'aggregation') {
+                return FilterAggregation;
+            } else if (mode === 'vad') {
+                return FilterVAD;
+            }
+            return Filter;
+        }
+
+        // ============================================================================
+        // КОНФИГУРАЦИЯ АГРЕГАЦИИ
+        // ============================================================================
+
+        const MaxAggregationParams = 5;
+        const DEFAULT_MAX_LABEL_LENGTH = 25;
+        let currentMaxLabelLength = DEFAULT_MAX_LABEL_LENGTH;
+
+        // ============================================================================
+        // КОНФИГУРАЦИЯ VAD (Value Added Chain Diagram)
+        // ============================================================================
+
+        /**
+         * VAD_ALLOWED_TYPES - Разрешенные типы объектов для режима VAD
+         */
+        const VAD_ALLOWED_TYPES = [
+            'vad:Process',
+            'http://example.org/vad#Process',
+            'vad:ExecutorGroup',
+            'http://example.org/vad#ExecutorGroup',
+            'vad:Executor',
+            'http://example.org/vad#Executor'
+        ];
+
+        /**
+         * VAD_ALLOWED_PREDICATES - Разрешенные предикаты для режима VAD
+         */
+        const VAD_ALLOWED_PREDICATES = [
+            'rdf:type',
+            'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+            'rdfs:label',
+            'http://www.w3.org/2000/01/rdf-schema#label',
+            'dcterms:description',
+            'http://purl.org/dc/terms/description',
+            'vad:hasNext',
+            'http://example.org/vad#hasNext',
+            'vad:hasExecutor',
+            'http://example.org/vad#hasExecutor',
+            'vad:hasParent',
+            'http://example.org/vad#hasParent',
+            'vad:includes',
+            'http://example.org/vad#includes'
+        ];
+
+        /**
+         * Валидирует RDF триплеты на соответствие схеме VAD
+         * @param {Array} quads - Массив RDF триплетов
+         * @param {Object} prefixes - Объект с префиксами
+         * @returns {Object} - {valid: boolean, errors: Array}
+         */
+        function validateVAD(quads, prefixes) {
+            const errors = [];
+
+            quads.forEach((quad, index) => {
+                const predicateUri = quad.predicate.value;
+                const predicateLabel = getPrefixedName(predicateUri, prefixes);
+
+                // Проверяем, что предикат разрешен
+                const predicateAllowed = VAD_ALLOWED_PREDICATES.some(allowed =>
+                    predicateUri === allowed || predicateLabel === allowed
+                );
+
+                if (!predicateAllowed) {
+                    const subjectLabel = getPrefixedName(quad.subject.value, prefixes);
+                    const objectLabel = quad.object.termType === 'Literal'
+                        ? `"${quad.object.value}"`
+                        : getPrefixedName(quad.object.value, prefixes);
+
+                    errors.push({
+                        triple: `${subjectLabel} ${predicateLabel} ${objectLabel}`,
+                        position: 'predicate',
+                        value: predicateLabel,
+                        message: `Недопустимый предикат: ${predicateLabel}`
+                    });
+                }
+
+                // Если предикат - rdf:type, проверяем, что тип разрешен
+                const typePredicates = [
+                    'rdf:type',
+                    'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+                ];
+
+                if (typePredicates.includes(predicateUri) || typePredicates.includes(predicateLabel)) {
+                    const typeUri = quad.object.value;
+                    const typeLabel = getPrefixedName(typeUri, prefixes);
+
+                    const typeAllowed = VAD_ALLOWED_TYPES.some(allowed =>
+                        typeUri === allowed || typeLabel === allowed
+                    );
+
+                    if (!typeAllowed) {
+                        const subjectLabel = getPrefixedName(quad.subject.value, prefixes);
+
+                        errors.push({
+                            triple: `${subjectLabel} ${predicateLabel} ${typeLabel}`,
+                            position: 'object (type)',
+                            value: typeLabel,
+                            message: `Недопустимый тип объекта: ${typeLabel}`
+                        });
+                    }
+                }
+            });
+
+            return {
+                valid: errors.length === 0,
+                errors: errors
+            };
+        }
+
+        /**
+         * Форматирует ошибки валидации VAD для отображения
+         * @param {Array} errors - Массив ошибок
+         * @returns {string} - Отформатированное сообщение
+         */
+        function formatVADErrors(errors) {
+            let message = 'ОШИБКА ВАЛИДАЦИИ VAD\n';
+            message += '═══════════════════════════════════════\n\n';
+
+            errors.forEach((error, index) => {
+                message += `Ошибка ${index + 1}:\n`;
+                message += `  Триплет: ${error.triple}\n`;
+                message += `  Позиция: ${error.position}\n`;
+                message += `  Значение: ${error.value}\n`;
+                message += `  ${error.message}\n\n`;
+            });
+
+            message += '═══════════════════════════════════════\n';
+            message += `Всего ошибок: ${errors.length}\n`;
+            message += '\nРазрешенные типы: vad:Process, vad:ExecutorGroup, vad:Executor\n';
+            message += 'Разрешенные предикаты: rdf:type, rdfs:label, dcterms:description,\n';
+            message += '  vad:hasNext, vad:hasExecutor, vad:hasParent, vad:includes';
+
+            return message;
+        }
+
+        // ============================================================================
+        // КОНФИГУРАЦИЯ СТИЛЕЙ
+        // ============================================================================
+
+        const StyleName = {
+            nodeStyles: {
+                'PersonStyle': {
+                    types: ['foaf:Person', 'schema:Person', 'http://xmlns.com/foaf/0.1/Person'],
+                    dot: 'shape="octagon" height="0.75" width="0.75" fixedsize="true" color="#9C27B0" fillcolor="#F3E5F5" fontname="Arial" fontsize="10" style="filled"',
+                    label: 'Люди (foaf:Person)',
+                    description: 'Объекты типа foaf:Person или schema:Person'
+                },
+                'OrganizationStyle': {
+                    types: ['foaf:Organization', 'schema:Organization', 'http://xmlns.com/foaf/0.1/Organization'],
+                    dot: 'shape="box" height="0.6" width="1.2" color="Blue" fillcolor="#E6F3FF" fontname="Arial" fontsize="10" style="filled,bold"',
+                    label: 'Организации (foaf:Organization)',
+                    description: 'Объекты типа foaf:Organization'
+                },
+                'DocumentStyle': {
+                    types: ['foaf:Document', 'schema:Document', 'http://xmlns.com/foaf/0.1/Document'],
+                    dot: 'shape="note" height="0.6" width="1.0" color="Green" fillcolor="#E8F5E9" fontname="Arial" fontsize="10" style="filled"',
+                    label: 'Документы (foaf:Document)',
+                    description: 'Объекты типа foaf:Document'
+                },
+                'LiteralStyle': {
+                    types: ['_Literal'],
+                    dot: 'shape="box" color="#666666" fillcolor="#FFFFCC" fontname="Arial" fontsize="9" style="filled,rounded"',
+                    label: 'Литералы (Literal)',
+                    description: 'Строковые значения, числа, даты'
+                },
+                'BlankNodeStyle': {
+                    types: ['_BlankNode'],
+                    dot: 'shape="ellipse" color="#999999" fillcolor="#E0E0E0" fontname="Arial" fontsize="9" style="filled,dashed"',
+                    label: 'Пустые узлы (BlankNode)',
+                    description: 'Анонимные узлы без URI'
+                },
+                'default': {
+                    types: [],
+                    dot: 'shape="ellipse" color="#1976D2" fillcolor="#CCE5FF" fontname="Arial" fontsize="10" style="filled"',
+                    label: 'По умолчанию (URI)',
+                    description: 'Все остальные URI-ресурсы'
+                }
+            },
+            edgeStyles: {
+                'TypeStyle': {
+                    predicates: ['rdf:type', 'a', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'],
+                    dot: 'color="#9C27B0" penwidth="2" style="dashed" arrowhead="empty"',
+                    label: 'Тип объекта (rdf:type)',
+                    description: 'Связь объекта с его RDF-типом'
+                },
+                'KnowsStyle': {
+                    predicates: ['foaf:knows', 'http://xmlns.com/foaf/0.1/knows'],
+                    dot: 'color="#4CAF50" penwidth="2" style="solid" arrowhead="vee"',
+                    label: 'Знает (foaf:knows)',
+                    description: 'Социальная связь между людьми'
+                },
+                'MemberStyle': {
+                    predicates: ['foaf:member', 'schema:member', 'http://xmlns.com/foaf/0.1/member'],
+                    dot: 'color="#795548" penwidth="2" style="solid" arrowhead="diamond"',
+                    label: 'Член (foaf:member)',
+                    description: 'Членство в организации'
+                },
+                'AttributeStyle': {
+                    predicates: [
+                        'foaf:name', 'http://xmlns.com/foaf/0.1/name',
+                        'foaf:age', 'http://xmlns.com/foaf/0.1/age',
+                        'rdfs:label', 'http://www.w3.org/2000/01/rdf-schema#label',
+                        'rdfs:comment', 'http://www.w3.org/2000/01/rdf-schema#comment'
+                    ],
+                    dot: 'color="#2196F3" penwidth="1" style="dotted" arrowhead="normal"',
+                    label: 'Атрибуты (name, label...)',
+                    description: 'Свойства объекта: имя, возраст и др.'
+                },
+                'default': {
+                    predicates: [],
+                    dot: 'color="#666666" penwidth="1" style="solid" arrowhead="normal"',
+                    label: 'По умолчанию',
+                    description: 'Все остальные предикаты'
+                }
+            }
+        };
+
+        // ============================================================================
+        // СТИЛИ VAD (Value Added Chain Diagram)
+        // ============================================================================
+
+        const VADNodeStyles = {
+            'ProcessStyle': {
+                types: ['vad:Process', 'http://example.org/vad#Process'],
+                // cds shape (chevron) с зелёной заливкой
+                dot: 'shape="cds" height="0.8" width="1.5" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"',
+                label: 'Процесс (vad:Process)',
+                description: 'Бизнес-процесс в VAD диаграмме'
+            },
+            'ExecutorGroupStyle': {
+                types: ['vad:ExecutorGroup', 'http://example.org/vad#ExecutorGroup'],
+                dot: 'shape="box" height="0.5" width="1.2" color="#1565C0" fillcolor="#BBDEFB" fontname="Arial" fontsize="9" style="filled,rounded"',
+                label: 'Группа исполнителей (vad:ExecutorGroup)',
+                description: 'Группа исполнителей процесса'
+            },
+            'ExecutorStyle': {
+                types: ['vad:Executor', 'http://example.org/vad#Executor'],
+                dot: 'shape="ellipse" height="0.4" width="0.8" color="#6A1B9A" fillcolor="#E1BEE7" fontname="Arial" fontsize="9" style="filled"',
+                label: 'Исполнитель (vad:Executor)',
+                description: 'Исполнитель процесса'
+            },
+            'default': {
+                types: [],
+                dot: 'shape="ellipse" color="#1976D2" fillcolor="#CCE5FF" fontname="Arial" fontsize="10" style="filled"',
+                label: 'По умолчанию',
+                description: 'Другие объекты'
+            }
+        };
+
+        const VADEdgeStyles = {
+            'HasNextStyle': {
+                predicates: ['vad:hasNext', 'http://example.org/vad#hasNext'],
+                // Зелёная стрелка для связей между процессами
+                dot: 'color="#2E7D32" penwidth="2" style="solid" arrowhead="vee"',
+                label: 'Следующий (vad:hasNext)',
+                description: 'Связь с следующим процессом'
+            },
+            'HasExecutorStyle': {
+                predicates: ['vad:hasExecutor', 'http://example.org/vad#hasExecutor'],
+                dot: 'color="#1565C0" penwidth="1" style="dashed" arrowhead="normal"',
+                label: 'Исполнитель (vad:hasExecutor)',
+                description: 'Связь процесса с группой исполнителей'
+            },
+            'IncludesStyle': {
+                predicates: ['vad:includes', 'http://example.org/vad#includes'],
+                dot: 'color="#6A1B9A" penwidth="1" style="dotted" arrowhead="normal"',
+                label: 'Включает (vad:includes)',
+                description: 'Связь группы с исполнителями'
+            },
+            'HasParentStyle': {
+                predicates: ['vad:hasParent', 'http://example.org/vad#hasParent'],
+                dot: 'color="#999999" penwidth="1" style="dashed" arrowhead="empty"',
+                label: 'Родитель (vad:hasParent)',
+                description: 'Связь с родительским процессом'
+            },
+            'TypeStyle': {
+                predicates: ['rdf:type', 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'],
+                dot: 'color="#9C27B0" penwidth="1" style="dashed" arrowhead="empty"',
+                label: 'Тип (rdf:type)',
+                description: 'Тип объекта'
+            },
+            'default': {
+                predicates: [],
+                dot: 'color="#666666" penwidth="1" style="solid" arrowhead="normal"',
+                label: 'По умолчанию',
+                description: 'Другие связи'
+            }
+        };
+
+        const AggregationNodeStyles = {
+            'PersonStyle': {
+                types: ['foaf:Person', 'schema:Person', 'http://xmlns.com/foaf/0.1/Person'],
+                dot: 'shape="ellipse" color="#9C27B0" penwidth="2" fillcolor="#F3E5F5" fontname="Arial" fontsize="10" style="filled"',
+                label: 'Люди (foaf:Person)',
+                description: 'Объекты типа foaf:Person'
+            },
+            'OrganizationStyle': {
+                types: ['foaf:Organization', 'schema:Organization', 'http://xmlns.com/foaf/0.1/Organization'],
+                dot: 'shape="ellipse" color="Blue" penwidth="3" fillcolor="#E3F2FD" fontname="Arial" fontsize="10" style="filled"',
+                label: 'Организации (foaf:Organization)',
+                description: 'Объекты типа foaf:Organization'
+            },
+            'DocumentStyle': {
+                types: ['foaf:Document', 'schema:Document', 'http://xmlns.com/foaf/0.1/Document'],
+                dot: 'shape="ellipse" color="Green" penwidth="2" fillcolor="#E8F5E9" fontname="Arial" fontsize="10" style="filled"',
+                label: 'Документы (foaf:Document)',
+                description: 'Объекты типа foaf:Document'
+            },
+            'BlankNodeStyle': {
+                types: ['_BlankNode'],
+                dot: 'shape="ellipse" color="#999999" penwidth="1" fillcolor="#E0E0E0" fontname="Arial" fontsize="9" style="filled,dashed"',
+                label: 'Пустые узлы (BlankNode)',
+                description: 'Анонимные узлы без URI'
+            },
+            'default': {
+                types: [],
+                dot: 'shape="ellipse" color="#1976D2" penwidth="1" fillcolor="#CCE5FF" fontname="Arial" fontsize="10" style="filled"',
+                label: 'По умолчанию (URI)',
+                description: 'Все остальные URI-ресурсы'
+            }
+        };
+
+        // ============================================================================
+        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+        // ============================================================================
+
+        let currentSvgElement = null;
+        let currentScale = 1.0;
+        let currentPrefixes = {};
+        let nodeTypesCache = {};
+        let currentQuads = [];
+        let nodeLabelToUri = {};
+        let selectedNodeElement = null;
+        let propertiesPanelCounter = 0;
+        let openPropertiesPanels = [];
+        let currentMode = Mode;
+        let draggedPanel = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        let currentStore = null;
+        let comunicaEngine = null;
+        let currentDotCode = '';
+
+        const defaultSparqlQuery = `SELECT ?s ?p ?o
+WHERE {
+    ?s ?p ?o .
+}`;
+
+        let activeFilters = [...getFilterConfig(Mode).hiddenPredicates];
+        let allPredicates = [];
+
+        // ============================================================================
+        // ФУНКЦИИ РАБОТЫ СО СТИЛЯМИ
+        // ============================================================================
+
+        const BaseStyles = {
+            literal: 'shape="box" style="filled" fillcolor="#ffffcc"',
+            blankNode: 'shape="ellipse" style="filled" fillcolor="#e0e0e0"',
+            uri: 'shape="ellipse" style="filled" fillcolor="#cce5ff"',
+            edge: ''
+        };
+
+        function getNodeStyle(nodeUri, isLiteral, isBlankNode) {
+            if (currentMode === 'base') {
+                if (isLiteral) return BaseStyles.literal;
+                if (isBlankNode) return BaseStyles.blankNode;
+                return BaseStyles.uri;
+            }
+
+            if (currentMode === 'aggregation') {
+                if (isBlankNode) return AggregationNodeStyles['BlankNodeStyle'].dot;
+                const nodeTypes = nodeTypesCache[nodeUri] || [];
+                for (const [styleName, styleConfig] of Object.entries(AggregationNodeStyles)) {
+                    if (styleName === 'default') continue;
+                    for (const type of styleConfig.types) {
+                        if (type.startsWith('_')) continue;
+                        if (nodeTypes.includes(type)) return styleConfig.dot;
+                    }
+                }
+                return AggregationNodeStyles['default'].dot;
+            }
+
+            if (currentMode === 'vad') {
+                if (isBlankNode) return VADNodeStyles['default'].dot;
+                const nodeTypes = nodeTypesCache[nodeUri] || [];
+                for (const [styleName, styleConfig] of Object.entries(VADNodeStyles)) {
+                    if (styleName === 'default') continue;
+                    for (const type of styleConfig.types) {
+                        if (nodeTypes.includes(type)) return styleConfig.dot;
+                    }
+                }
+                return VADNodeStyles['default'].dot;
+            }
+
+            // Режим нотации
+            if (isLiteral) return StyleName.nodeStyles['LiteralStyle'].dot;
+            if (isBlankNode) return StyleName.nodeStyles['BlankNodeStyle'].dot;
+
+            const nodeTypes = nodeTypesCache[nodeUri] || [];
+            for (const [styleName, styleConfig] of Object.entries(StyleName.nodeStyles)) {
+                if (styleName === 'default') continue;
+                for (const type of styleConfig.types) {
+                    if (type.startsWith('_')) continue;
+                    if (nodeTypes.includes(type)) return styleConfig.dot;
+                }
+            }
+            return StyleName.nodeStyles['default'].dot;
+        }
+
+        function getEdgeStyle(predicateUri, predicateLabel) {
+            if (currentMode === 'base') return BaseStyles.edge;
+
+            if (currentMode === 'vad') {
+                for (const [styleName, styleConfig] of Object.entries(VADEdgeStyles)) {
+                    if (styleName === 'default') continue;
+                    for (const predicate of styleConfig.predicates) {
+                        if (predicateUri === predicate || predicateLabel === predicate) {
+                            return styleConfig.dot;
+                        }
+                    }
+                }
+                return VADEdgeStyles['default'].dot;
+            }
+
+            // Режим нотации или агрегации
+            for (const [styleName, styleConfig] of Object.entries(StyleName.edgeStyles)) {
+                if (styleName === 'default') continue;
+                for (const predicate of styleConfig.predicates) {
+                    if (predicateUri === predicate || predicateLabel === predicate) {
+                        return styleConfig.dot;
+                    }
+                }
+            }
+            return StyleName.edgeStyles['default'].dot;
+        }
+
+        function buildNodeTypesCache(quads, prefixes) {
+            nodeTypesCache = {};
+            const typePredicates = [
+                'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+                'rdf:type',
+                'a'
+            ];
+
+            quads.forEach(quad => {
+                const predicateValue = quad.predicate.value;
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
+
+                if (typePredicates.includes(predicateValue) ||
+                    typePredicates.includes(predicateLabel) ||
+                    predicateLabel === 'a') {
+
+                    const subjectUri = quad.subject.value;
+                    const typeUri = quad.object.value;
+                    const typeLabel = getPrefixedName(typeUri, prefixes);
+
+                    if (!nodeTypesCache[subjectUri]) {
+                        nodeTypesCache[subjectUri] = [];
+                    }
+
+                    if (!nodeTypesCache[subjectUri].includes(typeUri)) {
+                        nodeTypesCache[subjectUri].push(typeUri);
+                    }
+                    if (!nodeTypesCache[subjectUri].includes(typeLabel)) {
+                        nodeTypesCache[subjectUri].push(typeLabel);
+                    }
+                }
+            });
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ МАСШТАБИРОВАНИЯ
+        // ============================================================================
+
+        function applyZoom() {
+            const zoomContent = document.getElementById('zoom-content');
+            const zoomLevel = document.getElementById('zoom-level');
+            if (zoomContent) zoomContent.style.transform = `scale(${currentScale})`;
+            if (zoomLevel) zoomLevel.textContent = Math.round(currentScale * 100) + '%';
+        }
+
+        function zoomIn() {
+            if (currentScale < 3.0) { currentScale += 0.1; applyZoom(); }
+        }
+
+        function zoomOut() {
+            if (currentScale > 0.1) { currentScale -= 0.1; applyZoom(); }
+        }
+
+        function zoomReset() {
+            currentScale = 1.0;
+            applyZoom();
+        }
+
+        function zoomFit() {
+            const zoomContainer = document.getElementById('zoom-container');
+            const output = document.getElementById('output');
+            const svg = output ? output.querySelector('svg') : null;
+            if (!zoomContainer || !svg) return;
+
+            const containerWidth = zoomContainer.clientWidth - 20;
+            const containerHeight = zoomContainer.clientHeight - 20;
+
+            let svgWidth = parseFloat(svg.getAttribute('width')) || svg.getBoundingClientRect().width;
+            let svgHeight = parseFloat(svg.getAttribute('height')) || svg.getBoundingClientRect().height;
+
+            const widthStr = svg.getAttribute('width') || '';
+            const heightStr = svg.getAttribute('height') || '';
+            if (widthStr.includes('pt')) svgWidth = parseFloat(widthStr) * 1.33;
+            if (heightStr.includes('pt')) svgHeight = parseFloat(heightStr) * 1.33;
+
+            const scaleX = containerWidth / svgWidth;
+            const scaleY = containerHeight / svgHeight;
+            currentScale = Math.min(scaleX, scaleY, 1.0);
+            applyZoom();
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ПАНЕЛИ СВОЙСТВ УЗЛА
+        // ============================================================================
+
+        function closePropertiesPanel(panelId) {
+            const panel = document.getElementById(panelId);
+            if (panel) {
+                panel.remove();
+                openPropertiesPanels = openPropertiesPanels.filter(p => p.id !== panelId);
+            }
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+        }
+
+        function closeAllPropertiesPanels() {
+            const container = document.getElementById('properties-panels-container');
+            if (container) container.innerHTML = '';
+            openPropertiesPanels = [];
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+        }
+
+        function getNodeProperties(nodeUri) {
+            const properties = [];
+            currentQuads.forEach(quad => {
+                if (quad.subject.value === nodeUri) {
+                    const predicateLabel = getPrefixedName(quad.predicate.value, currentPrefixes);
+                    const isLiteral = quad.object.termType === 'Literal';
+                    const objectLabel = isLiteral
+                        ? `"${quad.object.value}"`
+                        : getPrefixedName(quad.object.value, currentPrefixes);
+
+                    properties.push({
+                        predicate: quad.predicate.value,
+                        predicateLabel: predicateLabel,
+                        object: quad.object.value,
+                        objectLabel: objectLabel,
+                        isLiteral: isLiteral
+                    });
+                }
+            });
+            return properties;
+        }
+
+        function showNodeProperties(nodeUri, nodeLabel) {
+            const container = document.getElementById('properties-panels-container');
+            if (!container) return;
+
+            const existingPanel = openPropertiesPanels.find(p => p.uri === nodeUri);
+            if (existingPanel) {
+                const panel = document.getElementById(existingPanel.id);
+                if (panel) bringPanelToFront(panel);
+                return;
+            }
+
+            propertiesPanelCounter++;
+            const panelId = 'properties-panel-' + propertiesPanelCounter;
+
+            const offsetMultiplier = openPropertiesPanels.length % 5;
+            const rightOffset = 20 + (offsetMultiplier * 30);
+            const topOffset = 100 + (offsetMultiplier * 30);
+
+            const properties = getNodeProperties(nodeUri);
+
+            let propertiesHtml = '';
+            if (properties.length === 0) {
+                propertiesHtml = '<div class="properties-empty">У этого узла нет свойств</div>';
+            } else {
+                properties.forEach(prop => {
+                    propertiesHtml += '<div class="property-item">';
+                    propertiesHtml += `<div class="property-predicate">${prop.predicateLabel}</div>`;
+                    propertiesHtml += `<div class="property-value ${prop.isLiteral ? 'literal' : 'uri'}">${prop.objectLabel}</div>`;
+                    propertiesHtml += '</div>';
+                });
+            }
+
+            const nodeTypes = nodeTypesCache[nodeUri] || [];
+            if (nodeTypes.length > 0) {
+                const prefixedTypes = nodeTypes.filter(t => t.includes(':') && !t.startsWith('http'));
+                if (prefixedTypes.length > 0) {
+                    propertiesHtml += '<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">';
+                    propertiesHtml += '<div style="font-size: 12px; color: #666; margin-bottom: 5px;">Тип узла:</div>';
+                    prefixedTypes.forEach(type => {
+                        propertiesHtml += `<span class="properties-type-badge">${type}</span> `;
+                    });
+                    propertiesHtml += '</div>';
+                }
+            }
+
+            const panelHtml = `
+                <div class="properties-panel visible" id="${panelId}" style="right: ${rightOffset}px; top: ${topOffset}px;">
+                    <div class="properties-header" onmousedown="startDragPanel(event, '${panelId}')">
+                        <h3>${nodeLabel}</h3>
+                        <button class="properties-close-btn" onclick="closePropertiesPanel('${panelId}')">&times;</button>
+                    </div>
+                    <div class="properties-content">
+                        ${propertiesHtml}
+                    </div>
+                </div>
+            `;
+
+            container.insertAdjacentHTML('beforeend', panelHtml);
+            openPropertiesPanels.push({ id: panelId, uri: nodeUri, label: nodeLabel });
+
+            const newPanel = document.getElementById(panelId);
+            if (newPanel) bringPanelToFront(newPanel);
+        }
+
+        function bringPanelToFront(panel) {
+            let maxZIndex = 1000;
+            openPropertiesPanels.forEach(p => {
+                const el = document.getElementById(p.id);
+                if (el) {
+                    const z = parseInt(el.style.zIndex) || 1000;
+                    if (z > maxZIndex) maxZIndex = z;
+                }
+            });
+            panel.style.zIndex = maxZIndex + 1;
+        }
+
+        function startDragPanel(event, panelId) {
+            if (event.target.classList.contains('properties-close-btn')) return;
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+
+            draggedPanel = panel;
+            const rect = panel.getBoundingClientRect();
+            dragOffsetX = event.clientX - rect.left;
+            dragOffsetY = event.clientY - rect.top;
+
+            bringPanelToFront(panel);
+            document.addEventListener('mousemove', dragPanel);
+            document.addEventListener('mouseup', stopDragPanel);
+            event.preventDefault();
+        }
+
+        function dragPanel(event) {
+            if (!draggedPanel) return;
+            const newLeft = event.clientX - dragOffsetX;
+            const newTop = event.clientY - dragOffsetY;
+            draggedPanel.style.left = newLeft + 'px';
+            draggedPanel.style.top = newTop + 'px';
+            draggedPanel.style.right = 'auto';
+        }
+
+        function stopDragPanel() {
+            draggedPanel = null;
+            document.removeEventListener('mousemove', dragPanel);
+            document.removeEventListener('mouseup', stopDragPanel);
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ДЛЯ КЛИКОВ ПО УЗЛАМ
+        // ============================================================================
+
+        function addNodeClickHandlers() {
+            const svg = document.querySelector('#output svg');
+            if (!svg) return;
+
+            const nodes = svg.querySelectorAll('.node');
+            nodes.forEach(node => {
+                node.addEventListener('click', handleNodeClick);
+            });
+        }
+
+        function handleNodeClick(event) {
+            const nodeElement = event.currentTarget;
+            const titleElement = nodeElement.querySelector('title');
+            if (!titleElement) return;
+
+            const dotId = titleElement.textContent;
+
+            let nodeUri = null;
+            let nodeLabel = null;
+
+            for (const [label, info] of Object.entries(nodeLabelToUri)) {
+                if (info.dotId === dotId) {
+                    nodeUri = info.uri;
+                    nodeLabel = label;
+                    break;
+                }
+            }
+
+            if (!nodeUri) return;
+
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+            }
+            nodeElement.classList.add('selected');
+            selectedNodeElement = nodeElement;
+
+            showNodeProperties(nodeUri, nodeLabel);
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ФИЛЬТРОВ
+        // ============================================================================
+
+        function isPredicateHidden(predicateUri, predicateLabel) {
+            return activeFilters.includes(predicateUri) || activeFilters.includes(predicateLabel);
+        }
+
+        function displayFilters() {
+            const filterPanel = document.getElementById('filter-panel');
+            const filterContent = document.getElementById('filter-content');
+
+            allPredicates = [];
+            const predicateSet = new Set();
+
+            currentQuads.forEach(quad => {
+                const predicateUri = quad.predicate.value;
+                const predicateLabel = getPrefixedName(predicateUri, currentPrefixes);
+                if (!predicateSet.has(predicateLabel)) {
+                    predicateSet.add(predicateLabel);
+                    allPredicates.push({ uri: predicateUri, label: predicateLabel });
+                }
+            });
+
+            if (allPredicates.length === 0) {
+                filterPanel.style.display = 'none';
+                return;
+            }
+
+            allPredicates.sort((a, b) => a.label.localeCompare(b.label));
+
+            let html = '';
+            allPredicates.forEach(pred => {
+                const isHidden = isPredicateHidden(pred.uri, pred.label);
+                const checkboxId = 'filter-' + pred.label.replace(/[^a-zA-Z0-9]/g, '_');
+
+                html += `<div class="filter-item">`;
+                html += `<input type="checkbox" id="${checkboxId}" ${!isHidden ? 'checked' : ''} onchange="togglePredicateFilter('${pred.uri}', '${pred.label}', this.checked)">`;
+                html += `<label for="${checkboxId}">${pred.label}</label>`;
+                html += `</div>`;
+            });
+
+            filterContent.innerHTML = html;
+            filterPanel.style.display = 'block';
+        }
+
+        function togglePredicateFilter(predicateUri, predicateLabel, isVisible) {
+            if (isVisible) {
+                activeFilters = activeFilters.filter(f => f !== predicateUri && f !== predicateLabel);
+            } else {
+                if (!activeFilters.includes(predicateUri)) {
+                    activeFilters.push(predicateUri);
+                }
+                if (!activeFilters.includes(predicateLabel)) {
+                    activeFilters.push(predicateLabel);
+                }
+            }
+            revisualize();
+        }
+
+        function selectAllFilters() {
+            activeFilters = [];
+            displayFilters();
+            revisualize();
+        }
+
+        function deselectAllFilters() {
+            activeFilters = allPredicates.flatMap(p => [p.uri, p.label]);
+            displayFilters();
+            revisualize();
+        }
+
+        async function revisualize() {
+            const layoutEngine = document.getElementById('layout-engine').value;
+
+            try {
+                const filteredQuads = currentQuads.filter(quad => {
+                    const predicateUri = quad.predicate.value;
+                    const predicateLabel = getPrefixedName(predicateUri, currentPrefixes);
+                    return !isPredicateHidden(predicateUri, predicateLabel);
+                });
+
+                const dotCode = rdfToDot(filteredQuads, currentPrefixes);
+                currentDotCode = dotCode;
+                console.log('Пересгенерированный DOT-код:', dotCode);
+
+                const viz = await Viz.instance();
+                const svgString = viz.renderString(dotCode, { format: 'svg', engine: layoutEngine });
+
+                const output = document.getElementById('output');
+                output.innerHTML = svgString;
+                currentSvgElement = output.querySelector('svg');
+                addNodeClickHandlers();
+
+            } catch (error) {
+                console.error('Ошибка при перевизуализации:', error);
+            }
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ЗАГРУЗКИ ПРИМЕРОВ
+        // ============================================================================
+
+        function loadExampleTurtle() {
+            const exampleRdf = `# Пример RDF данных в формате Turtle
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+ex:john rdf:type foaf:Person ;
+    foaf:name "John Doe" ;
+    foaf:age 30 ;
+    foaf:knows ex:jane, ex:bob .
+
+ex:jane rdf:type foaf:Person ;
+    foaf:name "Jane Smith" ;
+    foaf:knows ex:john .
+
+ex:bob rdf:type foaf:Person ;
+    foaf:name "Bob Wilson" .
+
+ex:company rdf:type foaf:Organization ;
+    foaf:name "Example Corp" ;
+    foaf:member ex:bob, ex:jane .`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'turtle';
+            document.getElementById('visualization-mode').value = 'notation';
+            updateModeDescription();
+        }
+
+        /**
+         * Загружает пример VAD (Value Added Chain Diagram)
+         */
+        function loadExampleVAD() {
+            const exampleVAD = `# Пример VAD (Value Added Chain Diagram)
+# Цепочка добавленной стоимости с процессами и исполнителями
+
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vad: <http://example.org/vad#> .
+
+# Материнский процесс (не отображается в VAD режиме)
+vad:Process0 rdf:type vad:Process ;
+    rdfs:label "Процесс 0" ;
+    dcterms:description "Материнский процесс для всей цепочки" .
+
+# Процесс 1
+vad:Process1 rdf:type vad:Process ;
+    rdfs:label "Процесс 1" ;
+    dcterms:description "Первый процесс в цепочке добавленной стоимости" ;
+    vad:hasExecutor vad:ExecutorGroup1 ;
+    vad:hasParent vad:Process0 ;
+    vad:hasNext vad:Process2 .
+
+# Процесс 2
+vad:Process2 rdf:type vad:Process ;
+    rdfs:label "Процесс 2" ;
+    dcterms:description "Второй процесс, выполняется после Процесса 1" ;
+    vad:hasExecutor vad:ExecutorGroup2 ;
+    vad:hasParent vad:Process0 ;
+    vad:hasNext vad:Process3, vad:Process4 .
+
+# Процесс 3
+vad:Process3 rdf:type vad:Process ;
+    rdfs:label "Процесс 3" ;
+    dcterms:description "Третий процесс в цепочке" ;
+    vad:hasExecutor vad:ExecutorGroup3 ;
+    vad:hasParent vad:Process0 ;
+    vad:hasNext vad:Process4 .
+
+# Процесс 4
+vad:Process4 rdf:type vad:Process ;
+    rdfs:label "Процесс 4" ;
+    dcterms:description "Заключительный процесс в цепочке" ;
+    vad:hasExecutor vad:ExecutorGroup4 ;
+    vad:hasParent vad:Process0 .
+
+# Группы исполнителей
+vad:ExecutorGroup1 rdf:type vad:ExecutorGroup ;
+    rdfs:label "Группа исполнителей процесса Процесс 1" ;
+    vad:includes vad:Executor1 .
+
+vad:ExecutorGroup2 rdf:type vad:ExecutorGroup ;
+    rdfs:label "Группа исполнителей процесса Процесс 2" ;
+    vad:includes vad:Executor1, vad:Executor2 .
+
+vad:ExecutorGroup3 rdf:type vad:ExecutorGroup ;
+    rdfs:label "Группа исполнителей процесса Процесс 3" ;
+    vad:includes vad:Executor3 .
+
+vad:ExecutorGroup4 rdf:type vad:ExecutorGroup ;
+    rdfs:label "Группа исполнителей процесса Процесс 4" ;
+    vad:includes vad:Executor3, vad:Executor4 .
+
+# Исполнители
+vad:Executor1 rdf:type vad:Executor ;
+    rdfs:label "Исполнитель 1" .
+
+vad:Executor2 rdf:type vad:Executor ;
+    rdfs:label "Исполнитель 2" .
+
+vad:Executor3 rdf:type vad:Executor ;
+    rdfs:label "Исполнитель 3" .
+
+vad:Executor4 rdf:type vad:Executor ;
+    rdfs:label "Исполнитель 4" .`;
+
+            document.getElementById('rdf-input').value = exampleVAD;
+            document.getElementById('input-format').value = 'turtle';
+            document.getElementById('visualization-mode').value = 'vad';
+            updateModeDescription();
+        }
+
+        function loadExampleNTriples() {
+            const exampleRdf = `<http://example.org/john> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/name> "John Doe" .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/knows> <http://example.org/jane> .
+<http://example.org/jane> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> .
+<http://example.org/jane> <http://xmlns.com/foaf/0.1/name> "Jane Smith" .`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'n-triples';
+            document.getElementById('visualization-mode').value = 'notation';
+            updateModeDescription();
+        }
+
+        /**
+         * Загружает пример RDF данных в формате N-Quads
+         */
+        function loadExampleNQuads() {
+            const exampleRdf = `# Пример RDF данных в формате N-Quads
+# Формат: субъект предикат объект граф .
+# N-Quads расширяет N-Triples добавлением именованных графов
+<http://example.org/john> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> <http://example.org/people> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/name> "John Doe" <http://example.org/people> .
+<http://example.org/john> <http://xmlns.com/foaf/0.1/knows> <http://example.org/jane> <http://example.org/people> .
+<http://example.org/jane> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Person> <http://example.org/people> .
+<http://example.org/jane> <http://xmlns.com/foaf/0.1/name> "Jane Smith" <http://example.org/people> .
+<http://example.org/company> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://xmlns.com/foaf/0.1/Organization> <http://example.org/organizations> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/name> "Example Corp" <http://example.org/organizations> .
+<http://example.org/company> <http://xmlns.com/foaf/0.1/member> <http://example.org/john> <http://example.org/organizations> .`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'n-quads';
+            document.getElementById('visualization-mode').value = 'notation';
+            updateModeDescription();
+        }
+
+        /**
+         * Загружает пример RDF данных в формате TriG
+         */
+        function loadExampleTriG() {
+            const exampleRdf = `# Пример RDF данных в формате TriG
+# TriG расширяет Turtle добавлением именованных графов
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# Граф с информацией о людях
+ex:people {
+    ex:john rdf:type foaf:Person ;
+        foaf:name "John Doe" ;
+        foaf:knows ex:jane .
+
+    ex:jane rdf:type foaf:Person ;
+        foaf:name "Jane Smith" ;
+        foaf:knows ex:john .
+}
+
+# Граф с информацией об организациях
+ex:organizations {
+    ex:company rdf:type foaf:Organization ;
+        foaf:name "Example Corp" ;
+        foaf:member ex:john, ex:jane .
+}`;
+
+            document.getElementById('rdf-input').value = exampleRdf;
+            document.getElementById('input-format').value = 'trig';
+            document.getElementById('visualization-mode').value = 'notation';
+            updateModeDescription();
+        }
+
+        /**
+         * Для обратной совместимости: вызывает загрузку примера Turtle
+         */
+        function loadExample() {
+            loadExampleTurtle();
+        }
+
+        // ============================================================================
+        // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С URI
+        // ============================================================================
+
+        function getLocalName(uri) {
+            if (typeof uri !== 'string') return String(uri);
+            const hashIndex = uri.lastIndexOf('#');
+            const slashIndex = uri.lastIndexOf('/');
+            const splitIndex = Math.max(hashIndex, slashIndex);
+            if (splitIndex !== -1 && splitIndex < uri.length - 1) {
+                return uri.substring(splitIndex + 1);
+            }
+            return uri;
+        }
+
+        function getPrefixedName(uri, prefixes) {
+            if (typeof uri !== 'string') return String(uri);
+            for (const [prefix, namespace] of Object.entries(prefixes)) {
+                if (uri.startsWith(namespace)) {
+                    const localName = uri.substring(namespace.length);
+                    return prefix + ':' + localName;
+                }
+            }
+            return getLocalName(uri);
+        }
+
+        function escapeDotString(str) {
+            return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        }
+
+        function generateNodeId(value) {
+            let hash = 0;
+            for (let i = 0; i < value.length; i++) {
+                const char = value.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return 'node' + Math.abs(hash);
+        }
+
+        function isNameOrLabelPredicate(predicateLabel) {
+            const lowerPredicate = predicateLabel.toLowerCase();
+            return lowerPredicate.includes('name') || lowerPredicate.includes('label');
+        }
+
+        function escapeHtmlLabel(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        /**
+         * Экранирует HTML символы для безопасного отображения
+         * @param {string} text - Исходный текст
+         * @returns {string} - Экранированный текст
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function wrapTextByWords(text, maxLength) {
+            if (!text || text.length <= maxLength) return [text];
+            const words = text.split(/\s+/);
+            const lines = [];
+            let currentLine = '';
+            for (const word of words) {
+                if (currentLine.length === 0) {
+                    currentLine = word;
+                } else if (currentLine.length + 1 + word.length <= maxLength) {
+                    currentLine += ' ' + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            if (currentLine.length > 0) lines.push(currentLine);
+            return lines;
+        }
+
+        function formatLabelWithWrap(label, maxLength, isBold = false) {
+            const lines = wrapTextByWords(label, maxLength);
+            const needsWrap = lines.length > 1;
+            if (!needsWrap) {
+                if (isBold) return `<B>${escapeHtmlLabel(label)}</B>`;
+                return escapeHtmlLabel(label);
+            }
+            let result = '';
+            for (let i = 0; i < lines.length; i++) {
+                if (i > 0) result += '<BR/>';
+                const escapedLine = escapeHtmlLabel(lines[i]);
+                if (isBold) {
+                    result += `<FONT POINT-SIZE="9"><B>${escapedLine}</B></FONT>`;
+                } else {
+                    result += `<FONT POINT-SIZE="9">${escapedLine}</FONT>`;
+                }
+            }
+            return result;
+        }
+
+        // ============================================================================
+        // ГЕНЕРАЦИЯ DOT-КОДА
+        // ============================================================================
+
+        /**
+         * Генерирует DOT-код для режима VAD
+         * В этом режиме:
+         * - Процессы отображаются как cds (chevron) с зеленой заливкой
+         * - Под процессами показываются исполнители
+         * - Связи hasNext идут с востока на запад
+         * - hasParent не показывается, но есть в свойствах
+         */
+        function rdfToDotVAD(quads, prefixes = {}) {
+            buildNodeTypesCache(currentQuads, prefixes);
+            nodeLabelToUri = {};
+
+            // Собираем информацию о процессах и их исполнителях
+            const processes = new Map();  // URI процесса -> информация
+            const executorGroups = new Map();  // URI группы -> список исполнителей
+            const hasNextEdges = [];  // Связи hasNext между процессами
+
+            // Первый проход: собираем все объекты
+            quads.forEach(quad => {
+                const subjectUri = quad.subject.value;
+                const predicateUri = quad.predicate.value;
+                const predicateLabel = getPrefixedName(predicateUri, prefixes);
+                const objectValue = quad.object.value;
+
+                // Проверяем типы
+                const subjectTypes = nodeTypesCache[subjectUri] || [];
+                const isProcess = subjectTypes.some(t =>
+                    t === 'vad:Process' || t === 'http://example.org/vad#Process'
+                );
+
+                if (isProcess) {
+                    if (!processes.has(subjectUri)) {
+                        processes.set(subjectUri, {
+                            uri: subjectUri,
+                            label: getPrefixedName(subjectUri, prefixes),
+                            name: null,
+                            executorGroup: null,
+                            hasNext: [],
+                            hasParent: null
+                        });
+                    }
+
+                    const processInfo = processes.get(subjectUri);
+
+                    // Собираем rdfs:label для имени
+                    if (predicateLabel === 'rdfs:label' || predicateUri === 'http://www.w3.org/2000/01/rdf-schema#label') {
+                        processInfo.name = objectValue;
+                    }
+
+                    // Собираем hasExecutor
+                    if (predicateLabel === 'vad:hasExecutor' || predicateUri === 'http://example.org/vad#hasExecutor') {
+                        processInfo.executorGroup = objectValue;
+                    }
+
+                    // Собираем hasNext
+                    if (predicateLabel === 'vad:hasNext' || predicateUri === 'http://example.org/vad#hasNext') {
+                        processInfo.hasNext.push(objectValue);
+                        hasNextEdges.push({ from: subjectUri, to: objectValue });
+                    }
+
+                    // Собираем hasParent
+                    if (predicateLabel === 'vad:hasParent' || predicateUri === 'http://example.org/vad#hasParent') {
+                        processInfo.hasParent = objectValue;
+                    }
+                }
+
+                // Собираем информацию о группах исполнителей
+                const isExecutorGroup = subjectTypes.some(t =>
+                    t === 'vad:ExecutorGroup' || t === 'http://example.org/vad#ExecutorGroup'
+                );
+
+                if (isExecutorGroup) {
+                    if (!executorGroups.has(subjectUri)) {
+                        executorGroups.set(subjectUri, {
+                            uri: subjectUri,
+                            label: null,
+                            executors: []
+                        });
+                    }
+
+                    const groupInfo = executorGroups.get(subjectUri);
+
+                    if (predicateLabel === 'rdfs:label' || predicateUri === 'http://www.w3.org/2000/01/rdf-schema#label') {
+                        groupInfo.label = objectValue;
+                    }
+
+                    if (predicateLabel === 'vad:includes' || predicateUri === 'http://example.org/vad#includes') {
+                        groupInfo.executors.push(objectValue);
+                    }
+                }
+            });
+
+            // Собираем имена исполнителей
+            const executorNames = new Map();
+            quads.forEach(quad => {
+                const subjectUri = quad.subject.value;
+                const predicateUri = quad.predicate.value;
+                const predicateLabel = getPrefixedName(predicateUri, prefixes);
+                const objectValue = quad.object.value;
+
+                const subjectTypes = nodeTypesCache[subjectUri] || [];
+                const isExecutor = subjectTypes.some(t =>
+                    t === 'vad:Executor' || t === 'http://example.org/vad#Executor'
+                );
+
+                if (isExecutor && (predicateLabel === 'rdfs:label' || predicateUri === 'http://www.w3.org/2000/01/rdf-schema#label')) {
+                    executorNames.set(subjectUri, objectValue);
+                }
+            });
+
+            // Генерация DOT-кода
+            let dot = 'digraph VADGraph {\n';
+            dot += '    // VAD (Value Added Chain Diagram)\n';
+            dot += '    rankdir=LR;\n';
+            dot += '    node [fontname="Arial"];\n';
+            dot += '    edge [fontname="Arial", fontsize=10];\n';
+            dot += '    splines=curved;\n';  // Изогнутые линии для VAD
+            dot += '    forcelabels=true;\n';  // Принудительное отображение xlabel
+            dot += '\n';
+
+            // Добавляем узлы процессов (только те, у которых нет hasParent или hasParent не виден)
+            dot += '    // Процессы VAD (cds shape с зеленой заливкой)\n';
+
+            // Фильтруем процессы - показываем только те, которые не являются материнскими
+            // (Process0 скрыт, потому что он не имеет hasNext и является родителем)
+            const visibleProcesses = new Map();
+            processes.forEach((processInfo, uri) => {
+                // Показываем процесс, если он имеет hasNext или на него ссылается hasNext
+                const hasOutgoingNext = processInfo.hasNext.length > 0;
+                const hasIncomingNext = [...processes.values()].some(p => p.hasNext.includes(uri));
+
+                if (hasOutgoingNext || hasIncomingNext) {
+                    visibleProcesses.set(uri, processInfo);
+                }
+            });
+
+            visibleProcesses.forEach((processInfo, uri) => {
+                const nodeId = generateNodeId(uri);
+                const processName = processInfo.name || processInfo.label;
+
+                // Получаем список исполнителей для подписи под фигурой (xlabel)
+                let executorsList = '';
+                if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
+                    const group = executorGroups.get(processInfo.executorGroup);
+                    const executorNamesList = group.executors.map(exUri =>
+                        executorNames.get(exUri) || getPrefixedName(exUri, prefixes)
+                    );
+                    executorsList = executorNamesList.join(', ');
+                }
+
+                // Формируем HTML-like label только с именем процесса
+                // Имя процесса с переносом по словам
+                const wrappedProcessName = wrapTextByWords(processName, currentMaxLabelLength);
+                let htmlLabel = '<';
+
+                // Добавляем имя процесса (жирным шрифтом)
+                for (let i = 0; i < wrappedProcessName.length; i++) {
+                    if (i > 0) htmlLabel += '<BR/>';
+                    htmlLabel += `<B>${escapeHtmlLabel(wrappedProcessName[i])}</B>`;
+                }
+
+                htmlLabel += '>';
+
+                // cds shape с зеленой заливкой
+                // Убираем фиксированные размеры, чтобы узел мог адаптироваться под содержимое
+                let nodeStyle = 'shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"';
+
+                // Формируем xlabel для исполнителей (подпись под фигурой)
+                let xlabelAttr = '';
+                if (executorsList) {
+                    const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
+                    let xlabelHtml = '<';
+                    for (let i = 0; i < wrappedExecutors.length; i++) {
+                        if (i > 0) xlabelHtml += '<BR/>';
+                        xlabelHtml += `<FONT POINT-SIZE="9">${escapeHtmlLabel(wrappedExecutors[i])}</FONT>`;
+                    }
+                    xlabelHtml += '>';
+                    xlabelAttr = ` xlabel=${xlabelHtml}`;
+                }
+
+                dot += `    ${nodeId} [label=${htmlLabel} ${nodeStyle}${xlabelAttr}];\n`;
+                nodeLabelToUri[processInfo.label] = { uri: uri, dotId: nodeId };
+            });
+
+            dot += '\n';
+
+            // Добавляем ребра hasNext
+            dot += '    // Связи hasNext (восток -> запад)\n';
+
+            hasNextEdges.forEach(edge => {
+                // Проверяем, что оба процесса видимы
+                if (visibleProcesses.has(edge.from) && visibleProcesses.has(edge.to)) {
+                    const fromId = generateNodeId(edge.from);
+                    const toId = generateNodeId(edge.to);
+
+                    // Направление: из востока (правая часть) в запад (левая часть)
+                    // Используем tailport и headport для указания портов
+                    // Изогнутые тонкие стрелки (penwidth=1)
+                    dot += `    ${fromId} -> ${toId} [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee" tailport="e" headport="w"];\n`;
+                }
+            });
+
+            dot += '}\n';
+
+            return dot;
+        }
+
+        function rdfToDotAggregation(quads, prefixes = {}) {
+            buildNodeTypesCache(currentQuads, prefixes);
+            nodeLabelToUri = {};
+
+            const nodes = new Map();
+            const edges = [];
+            const nodeLiterals = new Map();
+
+            quads.forEach(quad => {
+                const subject = quad.subject;
+                const predicate = quad.predicate;
+                const object = quad.object;
+
+                const subjectValue = subject.value;
+                const predicateValue = predicate.value;
+                const objectValue = object.value;
+
+                const subjectLabel = getPrefixedName(subjectValue, prefixes);
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
+
+                if (!nodes.has(subjectValue)) {
+                    const nodeId = generateNodeId(subjectValue);
+                    nodes.set(subjectValue, {
+                        id: nodeId,
+                        label: subjectLabel,
+                        value: subjectValue,
+                        isUri: subject.termType === 'NamedNode',
+                        isBlank: subject.termType === 'BlankNode',
+                        isLiteral: false
+                    });
+                    nodeLabelToUri[subjectLabel] = { uri: subjectValue, dotId: nodeId };
+                    nodeLiterals.set(subjectValue, []);
+                }
+
+                if (object.termType === 'Literal') {
+                    const literals = nodeLiterals.get(subjectValue);
+                    literals.push({
+                        predicate: predicateLabel,
+                        value: objectValue,
+                        isNameLabel: isNameOrLabelPredicate(predicateLabel)
+                    });
+                } else {
+                    const objectLabel = getPrefixedName(objectValue, prefixes);
+                    if (!nodes.has(objectValue)) {
+                        const nodeId = generateNodeId(objectValue);
+                        nodes.set(objectValue, {
+                            id: nodeId,
+                            label: objectLabel,
+                            value: objectValue,
+                            isUri: object.termType === 'NamedNode',
+                            isLiteral: false,
+                            isBlank: object.termType === 'BlankNode'
+                        });
+                        nodeLabelToUri[objectLabel] = { uri: objectValue, dotId: nodeId };
+                        if (!nodeLiterals.has(objectValue)) {
+                            nodeLiterals.set(objectValue, []);
+                        }
+                    }
+                    edges.push({
+                        from: nodes.get(subjectValue).id,
+                        to: nodes.get(objectValue).id,
+                        label: predicateLabel,
+                        predicateUri: predicateValue
+                    });
+                }
+            });
+
+            let dot = 'digraph RDFGraph {\n';
+            dot += '    rankdir=LR;\n';
+            dot += '    node [fontname="Arial", shape="ellipse"];\n';
+            dot += '    edge [fontname="Arial", fontsize=10];\n';
+            dot += '\n';
+
+            nodes.forEach((nodeInfo, value) => {
+                const literals = nodeLiterals.get(value) || [];
+                const nameLabelLiterals = literals.filter(l => l.isNameLabel);
+                const otherLiterals = literals.filter(l => !l.isNameLabel);
+
+                let htmlLabel = '<';
+                htmlLabel += formatLabelWithWrap(nodeInfo.label, currentMaxLabelLength, true);
+
+                let addedLines = 1;
+                for (const lit of nameLabelLiterals) {
+                    if (addedLines >= MaxAggregationParams) break;
+                    htmlLabel += '<BR/>';
+                    htmlLabel += formatLabelWithWrap(lit.value, currentMaxLabelLength, false);
+                    addedLines++;
+                }
+
+                for (const lit of otherLiterals) {
+                    if (addedLines >= MaxAggregationParams) break;
+                    htmlLabel += '<BR/>';
+                    const fullText = lit.predicate + ': ' + lit.value;
+                    const wrappedLines = wrapTextByWords(fullText, currentMaxLabelLength);
+                    for (let j = 0; j < wrappedLines.length; j++) {
+                        if (j > 0) htmlLabel += '<BR/>';
+                        htmlLabel += `<FONT POINT-SIZE="8">${escapeHtmlLabel(wrappedLines[j])}</FONT>`;
+                    }
+                    addedLines++;
+                }
+
+                htmlLabel += '>';
+
+                const nodeStyle = getNodeStyle(nodeInfo.value, false, nodeInfo.isBlank);
+                dot += `    ${nodeInfo.id} [label=${htmlLabel} ${nodeStyle}];\n`;
+            });
+
+            dot += '\n';
+
+            edges.forEach(edge => {
+                const edgeStyle = getEdgeStyle(edge.predicateUri, edge.label);
+                dot += `    ${edge.from} -> ${edge.to} [label="${escapeDotString(edge.label)}" ${edgeStyle}];\n`;
+            });
+
+            dot += '}\n';
+            return dot;
+        }
+
+        function rdfToDot(quads, prefixes = {}) {
+            if (currentMode === 'aggregation') {
+                return rdfToDotAggregation(quads, prefixes);
+            }
+
+            if (currentMode === 'vad') {
+                return rdfToDotVAD(quads, prefixes);
+            }
+
+            buildNodeTypesCache(currentQuads, prefixes);
+            nodeLabelToUri = {};
+
+            const nodes = new Map();
+            const edges = [];
+
+            quads.forEach(quad => {
+                const subject = quad.subject;
+                const predicate = quad.predicate;
+                const object = quad.object;
+
+                const subjectValue = subject.value;
+                const predicateValue = predicate.value;
+                const objectValue = object.value;
+
+                const subjectLabel = getPrefixedName(subjectValue, prefixes);
+                const predicateLabel = getPrefixedName(predicateValue, prefixes);
+                const objectLabel = object.termType === 'Literal'
+                    ? `"${objectValue}"`
+                    : getPrefixedName(objectValue, prefixes);
+
+                if (!nodes.has(subjectValue)) {
+                    const nodeId = generateNodeId(subjectValue);
+                    nodes.set(subjectValue, {
+                        id: nodeId,
+                        label: subjectLabel,
+                        value: subjectValue,
+                        isUri: subject.termType === 'NamedNode',
+                        isBlank: subject.termType === 'BlankNode',
+                        isLiteral: false
+                    });
+                    nodeLabelToUri[subjectLabel] = { uri: subjectValue, dotId: nodeId };
+                }
+
+                if (!nodes.has(objectValue)) {
+                    const nodeId = generateNodeId(objectValue);
+                    nodes.set(objectValue, {
+                        id: nodeId,
+                        label: objectLabel,
+                        value: objectValue,
+                        isUri: object.termType === 'NamedNode',
+                        isLiteral: object.termType === 'Literal',
+                        isBlank: object.termType === 'BlankNode'
+                    });
+                    nodeLabelToUri[objectLabel] = { uri: objectValue, dotId: nodeId };
+                }
+
+                edges.push({
+                    from: nodes.get(subjectValue).id,
+                    to: nodes.get(objectValue).id,
+                    label: predicateLabel,
+                    predicateUri: predicateValue
+                });
+            });
+
+            let dot = 'digraph RDFGraph {\n';
+            dot += '    rankdir=LR;\n';
+            dot += '    node [fontname="Arial"];\n';
+            dot += '    edge [fontname="Arial", fontsize=10];\n';
+            dot += '\n';
+
+            nodes.forEach((nodeInfo, value) => {
+                const nodeStyle = getNodeStyle(nodeInfo.value, nodeInfo.isLiteral, nodeInfo.isBlank);
+
+                if (currentMode === 'notation' && nodeInfo.label.length > currentMaxLabelLength) {
+                    const wrappedLabel = formatLabelWithWrap(nodeInfo.label, currentMaxLabelLength, false);
+                    dot += `    ${nodeInfo.id} [label=<${wrappedLabel}> ${nodeStyle}];\n`;
+                } else {
+                    dot += `    ${nodeInfo.id} [label="${escapeDotString(nodeInfo.label)}" ${nodeStyle}];\n`;
+                }
+            });
+
+            dot += '\n';
+
+            edges.forEach(edge => {
+                const edgeStyle = getEdgeStyle(edge.predicateUri, edge.label);
+                dot += `    ${edge.from} -> ${edge.to} [label="${escapeDotString(edge.label)}" ${edgeStyle}];\n`;
+            });
+
+            dot += '}\n';
+            return dot;
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ОТОБРАЖЕНИЯ
+        // ============================================================================
+
+        function showLoading() {
+            const output = document.getElementById('output');
+            const resultContainer = document.getElementById('result-container');
+
+            resultContainer.style.display = 'block';
+            output.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Обработка RDF данных...</p>
+                </div>
+            `;
+
+            document.getElementById('export-buttons').style.display = 'none';
+            document.getElementById('zoom-controls').style.display = 'none';
+            document.getElementById('prefixes-panel').style.display = 'none';
+            document.getElementById('legend-panel').style.display = 'none';
+            document.getElementById('filter-panel').style.display = 'none';
+        }
+
+        function showError(message) {
+            const output = document.getElementById('output');
+            const resultContainer = document.getElementById('result-container');
+
+            resultContainer.style.display = 'block';
+            output.innerHTML = `<div class="error"><strong>Ошибка:</strong> ${message}</div>`;
+
+            document.getElementById('export-buttons').style.display = 'none';
+            document.getElementById('zoom-controls').style.display = 'none';
+            document.getElementById('prefixes-panel').style.display = 'none';
+            document.getElementById('legend-panel').style.display = 'none';
+            document.getElementById('filter-panel').style.display = 'none';
+        }
+
+        function showValidationError(message) {
+            const output = document.getElementById('output');
+            const resultContainer = document.getElementById('result-container');
+
+            resultContainer.style.display = 'block';
+            output.innerHTML = `<div class="validation-error">${message}</div>`;
+
+            document.getElementById('export-buttons').style.display = 'none';
+            document.getElementById('zoom-controls').style.display = 'none';
+            document.getElementById('prefixes-panel').style.display = 'none';
+            document.getElementById('legend-panel').style.display = 'none';
+            document.getElementById('filter-panel').style.display = 'none';
+        }
+
+        function displayPrefixes(prefixes) {
+            const prefixesPanel = document.getElementById('prefixes-panel');
+            const prefixesContent = document.getElementById('prefixes-content');
+
+            const prefixEntries = Object.entries(prefixes);
+            if (prefixEntries.length === 0) {
+                prefixesPanel.style.display = 'none';
+                return;
+            }
+
+            prefixEntries.sort((a, b) => a[0].localeCompare(b[0]));
+
+            let html = '';
+            for (const [prefix, namespace] of prefixEntries) {
+                html += `<div class="prefix-line">`;
+                html += `<span class="prefix-name">@prefix ${prefix}:</span> `;
+                html += `<a href="${namespace}" class="prefix-url" target="_blank">&lt;${namespace}&gt;</a> .`;
+                html += `</div>`;
+            }
+
+            prefixesContent.innerHTML = html;
+            prefixesPanel.style.display = 'block';
+        }
+
+        function displayLegend() {
+            const legendPanel = document.getElementById('legend-panel');
+            const legendContent = document.getElementById('legend-content');
+
+            let html = '';
+
+            // Выбираем источник стилей в зависимости от режима
+            let nodeStylesSource, edgeStylesSource;
+
+            if (currentMode === 'vad') {
+                nodeStylesSource = VADNodeStyles;
+                edgeStylesSource = VADEdgeStyles;
+            } else if (currentMode === 'aggregation') {
+                nodeStylesSource = AggregationNodeStyles;
+                edgeStylesSource = StyleName.edgeStyles;
+            } else {
+                nodeStylesSource = StyleName.nodeStyles;
+                edgeStylesSource = StyleName.edgeStyles;
+            }
+
+            html += '<div class="legend-section">';
+            html += '<h4>Стили узлов (Node Styles)</h4>';
+
+            for (const [styleName, styleConfig] of Object.entries(nodeStylesSource)) {
+                const fillColorMatch = styleConfig.dot.match(/fillcolor="([^"]+)"/);
+                const borderColorMatch = styleConfig.dot.match(/color="([^"]+)"/);
+                const shapeMatch = styleConfig.dot.match(/shape="([^"]+)"/);
+
+                const fillColor = fillColorMatch ? fillColorMatch[1] : '#ffffff';
+                const borderColor = borderColorMatch ? borderColorMatch[1] : '#000000';
+                const shape = shapeMatch ? shapeMatch[1] : 'ellipse';
+
+                let shapeStyle = '';
+                if (shape === 'box' || shape === 'note') {
+                    shapeStyle = 'border-radius: 0;';
+                } else if (shape === 'octagon') {
+                    shapeStyle = 'border-radius: 0; clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);';
+                } else if (shape === 'cds') {
+                    shapeStyle = 'border-radius: 0; clip-path: polygon(0% 0%, 85% 0%, 100% 50%, 85% 100%, 0% 100%, 15% 50%);';
+                } else {
+                    shapeStyle = 'border-radius: 50%;';
+                }
+
+                html += `<div class="legend-item">`;
+                html += `<div class="legend-shape" style="background-color: ${fillColor}; border-color: ${borderColor}; ${shapeStyle}"></div>`;
+                html += `<span class="legend-label">${styleConfig.label}</span>`;
+                html += `</div>`;
+            }
+
+            html += '</div>';
+
+            html += '<div class="legend-section">';
+            html += '<h4>Стили ребер (Edge Styles)</h4>';
+
+            for (const [styleName, styleConfig] of Object.entries(edgeStylesSource)) {
+                const colorMatch = styleConfig.dot.match(/color="([^"]+)"/);
+                const penwidthMatch = styleConfig.dot.match(/penwidth="([^"]+)"/);
+                const lineStyleMatch = styleConfig.dot.match(/style="([^"]+)"/);
+
+                const color = colorMatch ? colorMatch[1] : '#666666';
+                const penwidth = penwidthMatch ? parseInt(penwidthMatch[1]) : 1;
+                const lineStyle = lineStyleMatch ? lineStyleMatch[1] : 'solid';
+
+                let borderStyle = 'solid';
+                if (lineStyle === 'dashed') borderStyle = 'dashed';
+                if (lineStyle === 'dotted') borderStyle = 'dotted';
+
+                html += `<div class="legend-item">`;
+                html += `<span class="legend-line" style="background-color: ${color}; height: ${penwidth + 1}px; border-bottom: ${penwidth}px ${borderStyle} ${color}; background: none;"></span>`;
+                html += `<span class="legend-label">${styleConfig.label}</span>`;
+                html += `</div>`;
+            }
+
+            html += '</div>';
+
+            legendContent.innerHTML = html;
+            legendPanel.style.display = 'block';
+        }
+
+        function updateModeDescription() {
+            const mode = document.getElementById('visualization-mode').value;
+            const description = document.getElementById('mode-description');
+
+            const descriptions = {
+                'notation': 'С выделением типов объектов и предикатов цветом и формами',
+                'base': 'Базовый режим без специальных стилей',
+                'aggregation': 'Литералы агрегируются в узел субъекта',
+                'vad': 'VAD: процессы как cds-фигуры с исполнителями'
+            };
+
+            description.textContent = descriptions[mode] || '';
+        }
+
+        function toggleSparqlPanel() {
+            const sparqlMode = document.getElementById('sparql-mode').value;
+            const sparqlPanel = document.getElementById('sparql-panel');
+
+            if (sparqlMode === 'yes') {
+                sparqlPanel.classList.add('visible');
+            } else {
+                sparqlPanel.classList.remove('visible');
+            }
+        }
+
+        // ============================================================================
+        // ОСНОВНАЯ ФУНКЦИЯ ВИЗУАЛИЗАЦИИ
+        // ============================================================================
+
+        async function visualize() {
+            const rdfInput = document.getElementById('rdf-input').value.trim();
+            const inputFormat = document.getElementById('input-format').value;
+            const outputFormat = document.getElementById('output-format').value;
+            const layoutEngine = document.getElementById('layout-engine').value;
+            const visualizationMode = document.getElementById('visualization-mode').value;
+
+            const maxLabelLengthInput = document.getElementById('max-label-length');
+            const maxLabelLengthValue = parseInt(maxLabelLengthInput.value, 10);
+            if (!isNaN(maxLabelLengthValue) && maxLabelLengthValue >= 5 && maxLabelLengthValue <= 200) {
+                currentMaxLabelLength = maxLabelLengthValue;
+            } else {
+                currentMaxLabelLength = DEFAULT_MAX_LABEL_LENGTH;
+                maxLabelLengthInput.value = DEFAULT_MAX_LABEL_LENGTH;
+            }
+
+            currentMode = visualizationMode;
+
+            if (!rdfInput) {
+                showError('Пожалуйста, введите RDF данные');
+                return;
+            }
+
+            showLoading();
+
+            const button = document.getElementById('visualize-btn');
+            button.disabled = true;
+            button.textContent = 'Обработка...';
+
+            try {
+                const parser = new N3.Parser({ format: inputFormat });
+                const quads = [];
+                let prefixes = {};
+
+                await new Promise((resolve, reject) => {
+                    parser.parse(rdfInput, (error, quad, parsedPrefixes) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+                        if (quad) {
+                            quads.push(quad);
+                        } else {
+                            if (parsedPrefixes) {
+                                prefixes = parsedPrefixes;
+                            }
+                            resolve();
+                        }
+                    });
+                });
+
+                currentPrefixes = prefixes;
+                currentQuads = quads;
+                currentStore = null;
+
+                if (quads.length === 0) {
+                    showError('Не найдено RDF триплетов в данных');
+                    return;
+                }
+
+                // Валидация для режима VAD
+                if (currentMode === 'vad') {
+                    const validation = validateVAD(quads, prefixes);
+                    if (!validation.valid) {
+                        showValidationError(formatVADErrors(validation.errors));
+                        button.disabled = false;
+                        button.textContent = 'Визуализировать';
+                        return;
+                    }
+                }
+
+                activeFilters = [...getFilterConfig(currentMode).hiddenPredicates];
+
+                const filteredQuads = quads.filter(quad => {
+                    const predicateUri = quad.predicate.value;
+                    const predicateLabel = getPrefixedName(predicateUri, prefixes);
+                    return !isPredicateHidden(predicateUri, predicateLabel);
+                });
+
+                const dotCode = rdfToDot(filteredQuads, prefixes);
+                currentDotCode = dotCode;
+                console.log('Сгенерированный DOT-код:', dotCode);
+
+                const viz = await Viz.instance();
+                const svgString = viz.renderString(dotCode, {
+                    format: 'svg',
+                    engine: layoutEngine
+                });
+
+                const output = document.getElementById('output');
+                currentScale = 1.0;
+                applyZoom();
+
+                if (outputFormat === 'svg') {
+                    output.innerHTML = svgString;
+                    currentSvgElement = output.querySelector('svg');
+                    document.getElementById('export-buttons').style.display = 'block';
+                    document.getElementById('zoom-controls').style.display = 'flex';
+                } else if (outputFormat === 'png') {
+                    const pngDataUrl = await svgToPng(svgString);
+                    output.innerHTML = `<img src="${pngDataUrl}" alt="RDF Graph" style="max-width: 100%;">`;
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = svgString;
+                    currentSvgElement = tempDiv.querySelector('svg');
+                    document.getElementById('export-buttons').style.display = 'block';
+                    document.getElementById('zoom-controls').style.display = 'flex';
+                }
+
+                if (currentMode !== 'base') {
+                    displayLegend();
+                } else {
+                    document.getElementById('legend-panel').style.display = 'none';
+                }
+
+                displayPrefixes(prefixes);
+                displayFilters();
+                addNodeClickHandlers();
+                closeAllPropertiesPanels();
+
+                console.log(`Обработано ${quads.length} триплетов`);
+
+            } catch (error) {
+                console.error('Ошибка визуализации:', error);
+                showError(`${error.message}`);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Визуализировать';
+            }
+        }
+
+        // ============================================================================
+        // ФУНКЦИИ ЭКСПОРТА
+        // ============================================================================
+
+        function svgToPng(svgString) {
+            return new Promise((resolve, reject) => {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = svgString;
+                const svgElement = tempDiv.querySelector('svg');
+
+                let width = parseInt(svgElement.getAttribute('width')) || 800;
+                let height = parseInt(svgElement.getAttribute('height')) || 600;
+
+                const widthStr = svgElement.getAttribute('width') || '';
+                const heightStr = svgElement.getAttribute('height') || '';
+
+                if (widthStr.includes('pt')) {
+                    width = Math.ceil(parseFloat(widthStr) * 1.33);
+                }
+                if (heightStr.includes('pt')) {
+                    height = Math.ceil(parseFloat(heightStr) * 1.33);
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width * 2;
+                canvas.height = height * 2;
+                const ctx = canvas.getContext('2d');
+                ctx.scale(2, 2);
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, width, height);
+
+                const img = new Image();
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+
+                img.onload = function() {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    URL.revokeObjectURL(url);
+                    resolve(canvas.toDataURL('image/png'));
+                };
+
+                img.onerror = function() {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('Ошибка при конвертации SVG в PNG'));
+                };
+
+                img.src = url;
+            });
+        }
+
+        function downloadSVG() {
+            if (!currentSvgElement) {
+                alert('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            const svgData = new XMLSerializer().serializeToString(currentSvgElement);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+
+            const downloadLink = document.createElement('a');
+            downloadLink.href = URL.createObjectURL(svgBlob);
+            downloadLink.download = 'rdf-graph.svg';
+
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            URL.revokeObjectURL(downloadLink.href);
+        }
+
+        async function downloadPNG() {
+            if (!currentSvgElement) {
+                alert('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            try {
+                const svgData = new XMLSerializer().serializeToString(currentSvgElement);
+                const pngDataUrl = await svgToPng(svgData);
+
+                const downloadLink = document.createElement('a');
+                downloadLink.href = pngDataUrl;
+                downloadLink.download = 'rdf-graph.png';
+
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+
+            } catch (error) {
+                console.error('Ошибка при скачивании PNG:', error);
+                alert('Ошибка при создании PNG файла');
+            }
+        }
+
+        /**
+         * Маппинг внутренних форматов на сокращенные имена для URL
+         */
+        const formatMapping = {
+            'turtle': 'ttl',
+            'n-triples': 'nt',
+            'n-quads': 'nq',
+            'trig': 'trig'
+        };
+
+        /**
+         * Открывает визуализацию в новом окне через внешний LDF сервис
+         * Формирует URL с параметрами: rdf=данные&from=формат&to=png
+         */
+        function openInNewWindowLdfFi() {
+            // Получаем входные данные
+            const rdfInput = document.getElementById('rdf-input').value.trim();
+            const inputFormat = document.getElementById('input-format').value;
+
+            // Проверяем, что данные введены
+            if (!rdfInput) {
+                alert('Пожалуйста, введите RDF данные');
+                return;
+            }
+
+            // Получаем формат для параметра URL
+            const fromFormat = formatMapping[inputFormat] || 'ttl';
+
+            // Кодируем RDF данные для URL
+            // Заменяем пробелы на + для совместимости с LDF сервисом
+            const encodedRdf = encodeURIComponent(rdfInput).replace(/%20/g, '+');
+
+            // Формируем URL для внешнего сервиса
+            const serviceUrl = `https://www.ldf.fi/service/rdf-grapher?rdf=${encodedRdf}&from=${fromFormat}&to=png`;
+
+            // Открываем в новом окне
+            window.open(serviceUrl, '_blank');
+        }
+
+        /**
+         * Открывает визуализацию в новом окне через GitHub Pages (без внешнего сервиса)
+         * Формирует URL с параметрами: rdf=данные&from=формат&to=формат
+         * Аналогично работе LDF сервиса
+         */
+        function openInNewWindowGitHub() {
+            // Получаем входные данные
+            const rdfInput = document.getElementById('rdf-input').value.trim();
+            const inputFormat = document.getElementById('input-format').value;
+            const outputFormat = document.getElementById('output-format').value;
+
+            // Проверяем, что данные введены
+            if (!rdfInput) {
+                alert('Пожалуйста, введите RDF данные');
+                return;
+            }
+
+            // Получаем формат для параметра URL
+            const fromFormat = formatMapping[inputFormat] || 'ttl';
+
+            // Кодируем RDF данные для URL
+            const encodedRdf = encodeURIComponent(rdfInput).replace(/%20/g, '+');
+
+            // Определяем базовый URL для GitHub Pages
+            let baseUrl;
+            if (window.location.hostname === 'bpmbpm.github.io') {
+                baseUrl = 'https://bpmbpm.github.io/rdf-grapher/ver4p/';
+            } else {
+                // Для локального тестирования используем текущий путь
+                baseUrl = window.location.origin + window.location.pathname;
+            }
+
+            // Формируем URL с параметрами
+            const serviceUrl = `${baseUrl}?rdf=${encodedRdf}&from=${fromFormat}&to=${outputFormat}`;
+
+            // Открываем в новом окне
+            window.open(serviceUrl, '_blank');
+        }
+
+        /**
+         * Открывает DOT-код в GraphvizOnline для интерактивного редактирования
+         * Использует хеш URL для передачи DOT-кода
+         */
+        function openInNewWindowGraphvizOnline() {
+            // Проверяем, что DOT-код был сгенерирован
+            if (!currentDotCode) {
+                alert('Сначала визуализируйте RDF данные');
+                return;
+            }
+
+            // Кодируем DOT-код для URL
+            const encodedDot = encodeURIComponent(currentDotCode);
+
+            // Формируем URL с DOT-кодом в хеше
+            const graphvizUrl = `https://dreampuf.github.io/GraphvizOnline/#${encodedDot}`;
+
+            // Открываем в новом окне
+            window.open(graphvizUrl, '_blank');
+        }
+
+        // ============================================================================
+        // SPARQL ФУНКЦИИ
+        // ============================================================================
+
+        async function initSparqlEngine() {
+            if (!currentStore) {
+                currentStore = new N3.Store();
+                currentQuads.forEach(quad => currentStore.addQuad(quad));
+            }
+
+            if (!comunicaEngine) {
+                if (typeof Comunica !== 'undefined' && Comunica.QueryEngine) {
+                    comunicaEngine = new Comunica.QueryEngine();
+                }
+            }
+
+            return { store: currentStore, engine: comunicaEngine };
+        }
+
+        async function executeSparqlQuery() {
+            const queryInput = document.getElementById('sparql-query');
+            const resultsDiv = document.getElementById('sparql-results');
+            const resultsContent = document.getElementById('sparql-results-content');
+
+            const query = queryInput.value.trim();
+            if (!query) {
+                resultsContent.innerHTML = '<div class="sparql-error">Введите SPARQL запрос</div>';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            if (currentQuads.length === 0) {
+                resultsContent.innerHTML = '<div class="sparql-error">Сначала визуализируйте RDF данные</div>';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+
+            resultsContent.innerHTML = '<div class="sparql-loading"><div class="spinner"></div><p>Выполнение запроса...</p></div>';
+            resultsDiv.style.display = 'block';
+
+            try {
+                const { store, engine } = await initSparqlEngine();
+
+                if (!engine) {
+                    throw new Error('SPARQL движок не инициализирован');
+                }
+
+                const bindingsStream = await engine.queryBindings(query, {
+                    sources: [store]
+                });
+
+                const bindings = await bindingsStream.toArray();
+
+                if (bindings.length === 0) {
+                    resultsContent.innerHTML = '<p>Запрос не вернул результатов</p>';
+                    return;
+                }
+
+                const variables = [...bindings[0].keys()].map(k => k.value);
+
+                let html = '<table class="sparql-results-table">';
+                html += '<thead><tr>';
+                variables.forEach(v => {
+                    html += `<th>?${v}</th>`;
+                });
+                html += '</tr></thead>';
+                html += '<tbody>';
+
+                let rowIndex = 0;
+                bindings.forEach(binding => {
+                    // Собираем URI из этой строки для навигации к узлу
+                    const uris = [];
+                    variables.forEach(v => {
+                        const term = binding.get(v);
+                        if (term && term.termType !== 'Literal') {
+                            uris.push(term.value);
+                        }
+                    });
+
+                    // Кодируем URI в base64 для передачи через data-атрибут
+                    const urisData = btoa(encodeURIComponent(JSON.stringify(uris)));
+
+                    html += `<tr class="clickable" data-row-index="${rowIndex}" data-uris="${urisData}" onclick="highlightNodeFromSparqlResult(this)">`;
+                    variables.forEach(v => {
+                        const term = binding.get(v);
+                        if (term) {
+                            const value = term.value;
+                            const isLiteral = term.termType === 'Literal';
+                            const displayValue = isLiteral ? `"${value}"` : getPrefixedName(value, currentPrefixes);
+                            const cssClass = isLiteral ? 'literal' : 'uri';
+                            html += `<td class="${cssClass}">${escapeHtml(displayValue)}</td>`;
+                        } else {
+                            html += '<td>-</td>';
+                        }
+                    });
+                    html += '</tr>';
+                    rowIndex++;
+                });
+
+                html += '</tbody></table>';
+                html += `<p style="margin-top: 10px; font-size: 12px; color: #666;">Найдено результатов: ${bindings.length}</p>`;
+
+                resultsContent.innerHTML = html;
+
+            } catch (error) {
+                console.error('Ошибка SPARQL:', error);
+                resultsContent.innerHTML = `<div class="sparql-error">Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        /**
+         * Подсвечивает узел на графе при клике на строку в результатах SPARQL
+         * и открывает панель свойств для первого найденного URI
+         *
+         * @param {HTMLElement} rowElement - Элемент строки таблицы
+         */
+        function highlightNodeFromSparqlResult(rowElement) {
+            // Снимаем подсветку со всех строк
+            const allRows = document.querySelectorAll('.sparql-results-table tr.highlighted');
+            allRows.forEach(row => row.classList.remove('highlighted'));
+
+            // Подсвечиваем текущую строку
+            rowElement.classList.add('highlighted');
+
+            // Получаем URI из данных строки (base64 закодированный JSON)
+            const urisData = rowElement.getAttribute('data-uris');
+            if (!urisData) return;
+
+            let uris;
+            try {
+                // Декодируем base64 и затем URL-декодируем
+                uris = JSON.parse(decodeURIComponent(atob(urisData)));
+            } catch (e) {
+                console.error('Ошибка парсинга URI:', e);
+                return;
+            }
+
+            if (uris.length === 0) return;
+
+            // Снимаем выделение с предыдущего узла
+            if (selectedNodeElement) {
+                selectedNodeElement.classList.remove('selected');
+                selectedNodeElement = null;
+            }
+
+            // Ищем узлы на графе по URI
+            const output = document.getElementById('output');
+            const svg = output ? output.querySelector('svg') : null;
+            if (!svg) return;
+
+            const nodes = svg.querySelectorAll('.node');
+            let foundNode = null;
+            let foundUri = null;
+            let foundLabel = null;
+
+            // Пробуем найти узел для первого URI
+            for (const uri of uris) {
+                for (const [label, info] of Object.entries(nodeLabelToUri)) {
+                    if (info.uri === uri) {
+                        // Нашли маппинг, ищем узел по dotId
+                        for (const node of nodes) {
+                            const titleElement = node.querySelector('title');
+                            if (titleElement && titleElement.textContent === info.dotId) {
+                                foundNode = node;
+                                foundUri = uri;
+                                foundLabel = label;
+                                break;
+                            }
+                        }
+                        if (foundNode) break;
+                    }
+                }
+                if (foundNode) break;
+            }
+
+            if (foundNode) {
+                // Выделяем найденный узел
+                foundNode.classList.add('selected');
+                selectedNodeElement = foundNode;
+
+                // Прокручиваем к узлу
+                foundNode.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+
+                // Открываем панель свойств для найденного URI
+                if (foundUri) {
+                    const displayLabel = foundLabel || getPrefixedName(foundUri, currentPrefixes);
+                    showNodeProperties(foundUri, displayLabel);
+                }
+            } else if (uris.length > 0) {
+                // Если узел не найден на графе, все равно открываем панель свойств для первого URI
+                const uri = uris[0];
+                const displayLabel = getPrefixedName(uri, currentPrefixes);
+                showNodeProperties(uri, displayLabel);
+            }
+        }
+
+        function resetSparqlQuery() {
+            document.getElementById('sparql-query').value = defaultSparqlQuery;
+            document.getElementById('sparql-results').style.display = 'none';
+        }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            updateModeDescription();
+        });
+    </script>
+</body>
+</html>
