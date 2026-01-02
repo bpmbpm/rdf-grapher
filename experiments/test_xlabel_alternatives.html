@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test xlabel positioning alternatives for VAD mode</title>
+    <script src="https://unpkg.com/@viz-js/viz@3.4.0/lib/viz-standalone.js"></script>
+</head>
+<body>
+    <h1>Testing xlabel positioning alternatives for VAD mode</h1>
+    <p>Problem: xlabel positions labels to the left of CDS shapes instead of centered below.</p>
+
+    <h2>Test 1: Current approach (xlabel) - PROBLEM: shifted left</h2>
+    <div id="test1"></div>
+
+    <h2>Test 2: HTML TABLE label inside CDS - process name + executors together</h2>
+    <div id="test2"></div>
+
+    <h2>Test 3: Separate invisible label nodes below each process</h2>
+    <div id="test3"></div>
+
+    <h2>Test 4: Using subgraph clusters with rank constraints</h2>
+    <div id="test4"></div>
+
+    <h2>Test 5: Minimal height CDS with TABLE label</h2>
+    <div id="test5"></div>
+
+    <script>
+        async function runTests() {
+            const viz = await Viz.instance();
+
+            // Test 1: Current xlabel approach (has positioning issues)
+            const dot1 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    forcelabels=true;
+
+    P1 [label=<<B>Процесс 1</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled" xlabel=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>>];
+    P2 [label=<<B>Процесс 2</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled" xlabel=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>>];
+    P3 [label=<<B>Процесс 3</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled" xlabel=<<FONT POINT-SIZE="9">Исполнитель 4</FONT>>];
+    P4 [label=<<B>Процесс 4</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled" xlabel=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 5</FONT>>];
+
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+            try {
+                document.getElementById('test1').innerHTML = viz.renderSVGElement(dot1).outerHTML;
+            } catch(e) {
+                document.getElementById('test1').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test1').innerHTML += '<pre>' + dot1 + '</pre>';
+
+            // Test 2: HTML TABLE inside CDS - both process name and executors in label
+            const dot2 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+
+    P1 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+        <TR><TD><B>Процесс 1</B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1,<BR/>Исполнитель 2</FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled"];
+
+    P2 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+        <TR><TD><B>Процесс 2</B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 3</FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled"];
+
+    P3 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+        <TR><TD><B>Процесс 3</B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 4</FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled"];
+
+    P4 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">
+        <TR><TD><B>Процесс 4</B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#555555">Исполнитель 1,<BR/>Исполнитель 5</FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled"];
+
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+            try {
+                document.getElementById('test2').innerHTML = viz.renderSVGElement(dot2).outerHTML;
+            } catch(e) {
+                document.getElementById('test2').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test2').innerHTML += '<pre>' + dot2 + '</pre>';
+
+            // Test 3: Separate invisible label nodes below each process
+            const dot3 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    nodesep=0.5;
+    ranksep=0.5;
+
+    // Process nodes
+    P1 [label=<<B>Процесс 1</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<<B>Процесс 2</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<<B>Процесс 3</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<<B>Процесс 4</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Label nodes (invisible boxes)
+    L1 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="none" margin="0"];
+    L2 [label=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>> shape="none" margin="0"];
+    L3 [label=<<FONT POINT-SIZE="9">Исполнитель 4</FONT>> shape="none" margin="0"];
+    L4 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 5</FONT>> shape="none" margin="0"];
+
+    // Connect processes to labels (invisible)
+    P1 -> L1 [style=invis];
+    P2 -> L2 [style=invis];
+    P3 -> L3 [style=invis];
+    P4 -> L4 [style=invis];
+
+    // Process flow
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+
+    // Force same rank for processes
+    {rank=same; P1; P2; P3; P4;}
+}`;
+            try {
+                document.getElementById('test3').innerHTML = viz.renderSVGElement(dot3).outerHTML;
+            } catch(e) {
+                document.getElementById('test3').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test3').innerHTML += '<pre>' + dot3 + '</pre>';
+
+            // Test 4: Using subgraph clusters for each process+label pair
+            const dot4 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+    compound=true;
+    newrank=true;
+
+    subgraph cluster_P1 {
+        style=invis;
+        P1 [label=<<B>Процесс 1</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+        L1 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 2</FONT>> shape="none"];
+        P1 -> L1 [style=invis weight=10];
+    }
+
+    subgraph cluster_P2 {
+        style=invis;
+        P2 [label=<<B>Процесс 2</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+        L2 [label=<<FONT POINT-SIZE="9">Исполнитель 3</FONT>> shape="none"];
+        P2 -> L2 [style=invis weight=10];
+    }
+
+    subgraph cluster_P3 {
+        style=invis;
+        P3 [label=<<B>Процесс 3</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+        L3 [label=<<FONT POINT-SIZE="9">Исполнитель 4</FONT>> shape="none"];
+        P3 -> L3 [style=invis weight=10];
+    }
+
+    subgraph cluster_P4 {
+        style=invis;
+        P4 [label=<<B>Процесс 4</B>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+        L4 [label=<<FONT POINT-SIZE="9">Исполнитель 1,<BR/>Исполнитель 5</FONT>> shape="none"];
+        P4 -> L4 [style=invis weight=10];
+    }
+
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+            try {
+                document.getElementById('test4').innerHTML = viz.renderSVGElement(dot4).outerHTML;
+            } catch(e) {
+                document.getElementById('test4').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test4').innerHTML += '<pre>' + dot4 + '</pre>';
+
+            // Test 5: Minimal height with TABLE label
+            const dot5 = `
+digraph VADGraph {
+    rankdir=LR;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=curved;
+
+    P1 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="1" CELLPADDING="3">
+        <TR><TD><B><FONT POINT-SIZE="11">Процесс 1</FONT></B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#444444"><I>Исполнитель 1,<BR/>Исполнитель 2</I></FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled" height="0.8"];
+
+    P2 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="1" CELLPADDING="3">
+        <TR><TD><B><FONT POINT-SIZE="11">Процесс 2</FONT></B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#444444"><I>Исполнитель 3</I></FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled" height="0.8"];
+
+    P3 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="1" CELLPADDING="3">
+        <TR><TD><B><FONT POINT-SIZE="11">Процесс 3</FONT></B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#444444"><I>Исполнитель 4</I></FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled" height="0.8"];
+
+    P4 [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="1" CELLPADDING="3">
+        <TR><TD><B><FONT POINT-SIZE="11">Процесс 4</FONT></B></TD></TR>
+        <TR><TD><FONT POINT-SIZE="9" COLOR="#444444"><I>Исполнитель 1,<BR/>Исполнитель 5</I></FONT></TD></TR>
+    </TABLE>> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" style="filled" height="0.8"];
+
+    P1 -> P2 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P3 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P2 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+    P3 -> P4 [color="#2E7D32" penwidth="1" arrowhead="vee" tailport="e" headport="w"];
+}`;
+            try {
+                document.getElementById('test5').innerHTML = viz.renderSVGElement(dot5).outerHTML;
+            } catch(e) {
+                document.getElementById('test5').innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById('test5').innerHTML += '<pre>' + dot5 + '</pre>';
+        }
+
+        runTests();
+    </script>
+</body>
+</html>
