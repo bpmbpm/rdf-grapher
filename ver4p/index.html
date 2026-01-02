@@ -2494,66 +2494,19 @@ ex:organizations {
             dot += '\n';
 
             // Добавляем ребра hasNext между процессами
-            // Используем north порты для skip-ребер (ребер, которые пропускают промежуточные узлы в одной строке)
-            dot += '    // Связи hasNext - горизонтальный поток процессов\n';
+            // Все ребра hasNext используют порты East -> West (выход справа, вход слева) согласно issue #58
+            dot += '    // Связи hasNext - горизонтальный поток процессов (East -> West)\n';
 
-            // Функция для определения, является ли ребро skip-ребром в пределах одной строки
-            function isSkipEdgeInSameRow(fromUri, toUri) {
-                const fromPos = processPositionIndex.get(fromUri);
-                const toPos = processPositionIndex.get(toUri);
-                if (fromPos === undefined || toPos === undefined) return false;
-
-                // Определяем строки для обоих процессов
-                const fromRowIndex = Math.floor(fromPos / currentMaxVadRowLength);
-                const toRowIndex = Math.floor(toPos / currentMaxVadRowLength);
-
-                // Skip-ребро только если оба процесса в одной строке и между ними есть промежуточные
-                if (fromRowIndex !== toRowIndex) return false;
-
-                // Проверяем, есть ли промежуточные процессы между from и to
-                const fromPosInRow = fromPos % currentMaxVadRowLength;
-                const toPosInRow = toPos % currentMaxVadRowLength;
-
-                return Math.abs(toPosInRow - fromPosInRow) > 1;
-            }
-
-            // Функция для определения, пересекает ли ребро границу строки
-            function crossesRowBoundary(fromUri, toUri) {
-                const fromPos = processPositionIndex.get(fromUri);
-                const toPos = processPositionIndex.get(toUri);
-                if (fromPos === undefined || toPos === undefined) return false;
-
-                const fromRowIndex = Math.floor(fromPos / currentMaxVadRowLength);
-                const toRowIndex = Math.floor(toPos / currentMaxVadRowLength);
-
-                return fromRowIndex !== toRowIndex;
-            }
-
-            // Сначала добавляем все ребра hasNext
+            // Добавляем все ребра hasNext
             hasNextEdges.forEach(edge => {
                 // Проверяем, что оба процесса видимы
                 if (visibleProcesses.has(edge.from) && visibleProcesses.has(edge.to)) {
                     const fromId = generateNodeId(edge.from);
                     const toId = generateNodeId(edge.to);
 
-                    if (crossesRowBoundary(edge.from, edge.to)) {
-                        // Ребро пересекает границу строки - используем специальные порты
-                        // Выход из правого края последнего узла строки, вход в левый край первого узла следующей строки
-                        const fromPos = processPositionIndex.get(edge.from);
-                        const toPos = processPositionIndex.get(edge.to);
-                        const fromPosInRow = fromPos % currentMaxVadRowLength;
-                        const toPosInRow = toPos % currentMaxVadRowLength;
-
-                        // Если from в конце строки и to в начале следующей, используем south/north порты
-                        // В противном случае используем обычную маршрутизацию
-                        dot += `    ${fromId}:s -> ${toId}:n [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee"];\n`;
-                    } else if (isSkipEdgeInSameRow(edge.from, edge.to)) {
-                        // Skip-ребро в одной строке - маршрутизируем через north порты (сверху)
-                        dot += `    ${fromId}:n -> ${toId}:n [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee"];\n`;
-                    } else {
-                        // Обычное ребро - выход из east, вход на west
-                        dot += `    ${fromId}:e -> ${toId}:w [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee"];\n`;
-                    }
+                    // Все ребра hasNext используют порты East -> West (выход справа, вход слева)
+                    // Это обеспечивает единообразное направление связей согласно требованиям issue #58
+                    dot += `    ${fromId}:e -> ${toId}:w [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee"];\n`;
                 }
             });
 

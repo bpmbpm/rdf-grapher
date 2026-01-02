@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Issue 58 - Edge Directions (East to West)</title>
+    <script src="https://unpkg.com/@viz-js/viz@3.4.0/lib/viz-standalone.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { margin: 20px 0; border: 1px solid #ccc; padding: 15px; }
+        h2 { color: #333; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; font-size: 11px; }
+        .issue { color: red; }
+        .fix { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Issue 58 - Edge Directions (East to West)</h1>
+    <p>Testing solutions for issue #58 requirements:</p>
+    <ul>
+        <li>All vad:hasNext edges must exit from East (right side) of CDS</li>
+        <li>All vad:hasNext edges must enter from West (left side) of CDS</li>
+        <li>Row wrapping: next CDS starts from left edge</li>
+    </ul>
+
+    <div class="test">
+        <h2>Test 1: Current Issue - Skip edge P2->P4 uses North ports (violates East-West rule)</h2>
+        <p class="issue">P2:n -> P4:n - Lines exit/enter from top instead of sides</p>
+        <div id="test1"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 2: FIX - All edges use East-West ports, skip edges curve above</h2>
+        <p class="fix">All edges use :e -> :w ports. Skip edges will naturally curve above with splines=spline</p>
+        <div id="test2"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 3: Current Issue - Row wrapping uses South-North ports</h2>
+        <p class="issue">P4:s -> P5:n - Line goes down from last process to first of next row</p>
+        <div id="test3"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 4: FIX - Row wrapping with East-West + invisible transition edge</h2>
+        <p class="fix">P4:e -> P5:w with proper row separation. Edge curves to wrap to next row while maintaining East-West direction</p>
+        <div id="test4"></div>
+    </div>
+
+    <div class="test">
+        <h2>Test 5: Combined Fix - All requirements satisfied</h2>
+        <p class="fix">Skip edges + row wrapping all use East-West ports</p>
+        <div id="test5"></div>
+    </div>
+
+    <script>
+        async function runTests() {
+            const viz = await Viz.instance();
+
+            // Test 1: Current Issue - Skip edge uses North ports
+            const dot1 = `
+digraph VADGraph {
+    rankdir=TB;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=spline;
+    nodesep=0.8;
+    ranksep=0.3;
+
+    // Process nodes
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P5 [label=<Процесс 5> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Executor nodes
+    E1 [label=<<FONT POINT-SIZE="9">Исп. 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E2 [label=<<FONT POINT-SIZE="9">Исп. 1, Исп. 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E3 [label=<<FONT POINT-SIZE="9">Исп. 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E4 [label=<<FONT POINT-SIZE="9">Исп. 3, Исп. 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E5 [label=<<FONT POINT-SIZE="9">Исп. 5</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+
+    { rank=same; P1; P2; P3; P4; P5; }
+    { rank=same; E1; E2; E3; E4; E5; }
+
+    P1 -> E1 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P2 -> E2 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P3 -> E3 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P4 -> E4 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P5 -> E5 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+
+    // ISSUE: Skip edge P2->P4 uses North ports - violates East-West rule
+    P1:e -> P2:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2:e -> P3:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2:n -> P4:n [color="#2E7D32" penwidth="1" arrowhead="vee"];  // BAD - uses :n ports
+    P3:e -> P4:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P4:e -> P5:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+}`;
+
+            renderTest('test1', viz, dot1);
+
+            // Test 2: FIX - All edges use East-West, skip edges curve naturally
+            const dot2 = `
+digraph VADGraph {
+    rankdir=TB;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=spline;
+    nodesep=0.8;
+    ranksep=0.3;
+
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P5 [label=<Процесс 5> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    E1 [label=<<FONT POINT-SIZE="9">Исп. 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E2 [label=<<FONT POINT-SIZE="9">Исп. 1, Исп. 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E3 [label=<<FONT POINT-SIZE="9">Исп. 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E4 [label=<<FONT POINT-SIZE="9">Исп. 3, Исп. 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E5 [label=<<FONT POINT-SIZE="9">Исп. 5</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+
+    { rank=same; P1; P2; P3; P4; P5; }
+    { rank=same; E1; E2; E3; E4; E5; }
+
+    P1 -> E1 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P2 -> E2 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P3 -> E3 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P4 -> E4 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P5 -> E5 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+
+    // FIX: ALL edges use East-West (:e -> :w) - skip edges curve above naturally
+    P1:e -> P2:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2:e -> P3:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2:e -> P4:w [color="#2E7D32" penwidth="1" arrowhead="vee"];  // FIXED - uses :e -> :w
+    P3:e -> P4:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P4:e -> P5:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+}`;
+
+            renderTest('test2', viz, dot2);
+
+            // Test 3: Current Issue - Row wrapping uses South-North ports
+            const dot3 = `
+digraph VADGraph {
+    rankdir=TB;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=spline;
+    nodesep=0.8;
+    ranksep=0.3;
+
+    // Row 1
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Row 2
+    P5 [label=<Процесс 5> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P6 [label=<Процесс 6> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P7 [label=<Процесс 7> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P8 [label=<Процесс 8> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Executors Row 1
+    E1 [label=<<FONT POINT-SIZE="9">Исп. 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E2 [label=<<FONT POINT-SIZE="9">Исп. 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E3 [label=<<FONT POINT-SIZE="9">Исп. 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E4 [label=<<FONT POINT-SIZE="9">Исп. 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+
+    // Executors Row 2
+    E5 [label=<<FONT POINT-SIZE="9">Исп. 5</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E6 [label=<<FONT POINT-SIZE="9">Исп. 6</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E7 [label=<<FONT POINT-SIZE="9">Исп. 7</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E8 [label=<<FONT POINT-SIZE="9">Исп. 8</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+
+    { rank=same; P1; P2; P3; P4; }
+    { rank=same; E1; E2; E3; E4; }
+    { rank=same; P5; P6; P7; P8; }
+    { rank=same; E5; E6; E7; E8; }
+
+    // Row separation
+    E4 -> P5 [style=invis weight=100];
+
+    P1 -> E1 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P2 -> E2 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P3 -> E3 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P4 -> E4 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P5 -> E5 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P6 -> E6 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P7 -> E7 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P8 -> E8 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+
+    // Row 1 flow
+    P1:e -> P2:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2:e -> P3:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P3:e -> P4:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+
+    // ISSUE: Row transition uses South-North ports (violates East-West rule)
+    P4:s -> P5:n [color="#2E7D32" penwidth="1" arrowhead="vee"];  // BAD
+
+    // Row 2 flow
+    P5:e -> P6:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P6:e -> P7:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P7:e -> P8:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+}`;
+
+            renderTest('test3', viz, dot3);
+
+            // Test 4: FIX - Row wrapping with East-West ports
+            const dot4 = `
+digraph VADGraph {
+    rankdir=TB;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=spline;
+    nodesep=0.8;
+    ranksep=0.3;
+
+    // Row 1
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Row 2
+    P5 [label=<Процесс 5> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P6 [label=<Процесс 6> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P7 [label=<Процесс 7> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P8 [label=<Процесс 8> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Executors Row 1
+    E1 [label=<<FONT POINT-SIZE="9">Исп. 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E2 [label=<<FONT POINT-SIZE="9">Исп. 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E3 [label=<<FONT POINT-SIZE="9">Исп. 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E4 [label=<<FONT POINT-SIZE="9">Исп. 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+
+    // Executors Row 2
+    E5 [label=<<FONT POINT-SIZE="9">Исп. 5</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E6 [label=<<FONT POINT-SIZE="9">Исп. 6</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E7 [label=<<FONT POINT-SIZE="9">Исп. 7</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E8 [label=<<FONT POINT-SIZE="9">Исп. 8</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+
+    { rank=same; P1; P2; P3; P4; }
+    { rank=same; E1; E2; E3; E4; }
+    { rank=same; P5; P6; P7; P8; }
+    { rank=same; E5; E6; E7; E8; }
+
+    // Row separation
+    E4 -> P5 [style=invis weight=100];
+
+    P1 -> E1 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P2 -> E2 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P3 -> E3 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P4 -> E4 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P5 -> E5 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P6 -> E6 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P7 -> E7 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P8 -> E8 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+
+    // Row 1 flow
+    P1:e -> P2:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2:e -> P3:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P3:e -> P4:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+
+    // FIXED: Row transition uses East-West ports (exit from East, enter to West)
+    // Edge goes from P4 east, curves down around the side, enters P5 from west
+    P4:e -> P5:w [color="#2E7D32" penwidth="1" arrowhead="vee"];  // FIXED - uses :e -> :w
+
+    // Row 2 flow
+    P5:e -> P6:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P6:e -> P7:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P7:e -> P8:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+}`;
+
+            renderTest('test4', viz, dot4);
+
+            // Test 5: Combined Fix - All requirements satisfied
+            const dot5 = `
+digraph VADGraph {
+    rankdir=TB;
+    node [fontname="Arial"];
+    edge [fontname="Arial", fontsize=10];
+    splines=spline;
+    nodesep=0.8;
+    ranksep=0.3;
+
+    // Row 1
+    P1 [label=<Процесс 1> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P2 [label=<Процесс 2> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P3 [label=<Процесс 3> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P4 [label=<Процесс 4> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Row 2
+    P5 [label=<Процесс 5> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P6 [label=<Процесс 6> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P7 [label=<Процесс 7> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+    P8 [label=<Процесс 8> shape="cds" color="#2E7D32" fillcolor="#A5D6A7" fontsize="11" style="filled"];
+
+    // Executors Row 1
+    E1 [label=<<FONT POINT-SIZE="9">Исп. 1</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E2 [label=<<FONT POINT-SIZE="9">Исп. 1, 2</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E3 [label=<<FONT POINT-SIZE="9">Исп. 3</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E4 [label=<<FONT POINT-SIZE="9">Исп. 3, 4</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+
+    // Executors Row 2
+    E5 [label=<<FONT POINT-SIZE="9">Исп. 5, 6</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E6 [label=<<FONT POINT-SIZE="9">Исп. 7, 8</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E7 [label=<<FONT POINT-SIZE="9">Исп. 1, 5</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+    E8 [label=<<FONT POINT-SIZE="9">Исп. 2, 7</FONT>> shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" style="filled"];
+
+    { rank=same; P1; P2; P3; P4; }
+    { rank=same; E1; E2; E3; E4; }
+    { rank=same; P5; P6; P7; P8; }
+    { rank=same; E5; E6; E7; E8; }
+
+    // Row separation
+    E4 -> P5 [style=invis weight=100];
+
+    P1 -> E1 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P2 -> E2 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P3 -> E3 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P4 -> E4 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P5 -> E5 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P6 -> E6 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P7 -> E7 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+    P8 -> E8 [color="#1565C0" style="dashed" arrowhead="none" weight=10];
+
+    // ALL hasNext edges use East -> West (:e -> :w)
+
+    // Row 1 flow (includes skip edge P2->P4)
+    P1:e -> P2:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2:e -> P3:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P2:e -> P4:w [color="#2E7D32" penwidth="1" arrowhead="vee"];  // Skip edge - uses :e -> :w
+    P3:e -> P4:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+
+    // Row transition (P4 -> P5) - uses East -> West ports
+    P4:e -> P5:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+
+    // Row 2 flow
+    P5:e -> P6:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P6:e -> P7:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+    P7:e -> P8:w [color="#2E7D32" penwidth="1" arrowhead="vee"];
+}`;
+
+            renderTest('test5', viz, dot5);
+        }
+
+        function renderTest(id, viz, dot) {
+            try {
+                document.getElementById(id).innerHTML = viz.renderSVGElement(dot).outerHTML;
+            } catch(e) {
+                document.getElementById(id).innerHTML = '<pre style="color:red">' + e + '</pre>';
+            }
+            document.getElementById(id).innerHTML += '<pre>' + dot + '</pre>';
+        }
+
+        runTests();
+    </script>
+</body>
+</html>
