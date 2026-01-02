@@ -2294,13 +2294,16 @@ ex:organizations {
             dot += '\n';
 
             // Добавляем ExecutorGroup узлы (желтые эллипсы)
+            // ExecutorGroup объекты теперь кликабельны и показывают свойства
             dot += '    // ExecutorGroup узлы (эллипсы с желтоватой заливкой)\n';
             visibleProcesses.forEach((processInfo, uri) => {
                 const nodeId = generateNodeId(uri);
 
                 // Получаем список исполнителей
                 let executorsList = '';
+                let executorGroupUri = null;
                 if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
+                    executorGroupUri = processInfo.executorGroup;
                     const group = executorGroups.get(processInfo.executorGroup);
                     const executorNamesList = group.executors.map(exUri =>
                         executorNames.get(exUri) || getPrefixedName(exUri, prefixes)
@@ -2308,7 +2311,7 @@ ex:organizations {
                     executorsList = executorNamesList.join(', ');
                 }
 
-                if (executorsList) {
+                if (executorsList && executorGroupUri) {
                     const executorNodeId = `${nodeId}_exec`;
                     const wrappedExecutors = wrapTextByWords(executorsList, currentMaxLabelLength);
 
@@ -2321,6 +2324,10 @@ ex:organizations {
 
                     // ExecutorGroup как эллипс с желтоватой заливкой
                     dot += `    ${executorNodeId} [label=${execLabel} shape="ellipse" color="#B8860B" fillcolor="#FFFFCC" fontname="Arial" style="filled"];\n`;
+
+                    // Регистрируем ExecutorGroup для кликабельности (показ свойств объекта)
+                    const executorGroupLabel = getPrefixedName(executorGroupUri, prefixes);
+                    nodeLabelToUri[executorGroupLabel] = { uri: executorGroupUri, dotId: executorNodeId };
                 }
             });
 
@@ -2349,21 +2356,21 @@ ex:organizations {
                 dot += '\n';
             }
 
-            // Добавляем невидимые связи для позиционирования ExecutorGroup под соответствующим CDS
-            dot += '    // Невидимые связи для позиционирования ExecutorGroup под CDS\n';
+            // Добавляем видимые связи vad:hasExecutor между CDS и ExecutorGroup
+            dot += '    // Связи vad:hasExecutor - видимые ребра от процессов к группам исполнителей\n';
             visibleProcesses.forEach((processInfo, uri) => {
                 const nodeId = generateNodeId(uri);
 
-                let executorsList = '';
+                let hasExecutorGroup = false;
                 if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
                     const group = executorGroups.get(processInfo.executorGroup);
-                    executorsList = group.executors.length > 0 ? 'has' : '';
+                    hasExecutorGroup = group.executors.length > 0;
                 }
 
-                if (executorsList) {
+                if (hasExecutorGroup) {
                     const executorNodeId = `${nodeId}_exec`;
-                    // Невидимая связь для привязки executor к своему CDS
-                    dot += `    ${nodeId} -> ${executorNodeId} [style=invis weight=10];\n`;
+                    // Видимая связь vad:hasExecutor (синяя пунктирная)
+                    dot += `    ${nodeId} -> ${executorNodeId} [color="#1565C0" penwidth="1" style="dashed" arrowhead="normal" weight=10];\n`;
                 }
             });
 
@@ -2380,14 +2387,18 @@ ex:organizations {
             });
 
             // Затем добавляем связи hasNext внутри этого subgraph
+            // Правило: исходящие линии из левой стороны CDS (east), входящие в правую сторону (west)
+            // Примечание: CDS shape направлена вправо (как стрелка), поэтому:
+            // - Левая сторона CDS = восток (east, :e) — откуда выходят стрелки
+            // - Правая сторона CDS = запад (west, :w) — куда входят стрелки
             hasNextEdges.forEach(edge => {
                 // Проверяем, что оба процесса видимы
                 if (visibleProcesses.has(edge.from) && visibleProcesses.has(edge.to)) {
                     const fromId = generateNodeId(edge.from);
                     const toId = generateNodeId(edge.to);
 
-                    // В TB режиме горизонтальные стрелки
-                    dot += `        ${fromId} -> ${toId} [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee"];\n`;
+                    // Используем порты: выход из востока (правый край CDS), вход на запад (левый край CDS)
+                    dot += `        ${fromId}:e -> ${toId}:w [color="#2E7D32" penwidth="1" style="solid" arrowhead="vee"];\n`;
                 }
             });
 
