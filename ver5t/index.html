@@ -403,12 +403,21 @@
             border-radius: 6px 6px 0 0;
         }
 
+        .properties-header-content {
+            flex: 1;
+            padding-right: 10px;
+        }
+
+        .properties-header-title {
+            font-size: 11px;
+            opacity: 0.85;
+            margin-bottom: 2px;
+        }
+
         .properties-header h3 {
             margin: 0;
             font-size: 14px;
             word-break: break-all;
-            flex: 1;
-            padding-right: 10px;
         }
 
         .properties-close-btn {
@@ -1604,6 +1613,40 @@ WHERE {
     ?s ?p ?o .
 }`;
 
+        /**
+         * Генерирует SPARQL запрос с GRAPH clause для указанного TriG
+         * @param {string} trigUri - URI TriG для фильтрации
+         * @returns {string} - SPARQL запрос с GRAPH clause
+         */
+        function getSparqlQueryForTriG(trigUri) {
+            if (!trigUri) return defaultSparqlQuery;
+
+            const prefixedUri = getPrefixedName(trigUri, currentPrefixes);
+            // Если URI имеет префикс, используем его, иначе используем полный URI в угловых скобках
+            const graphRef = prefixedUri.includes(':') && !prefixedUri.startsWith('http')
+                ? prefixedUri
+                : `<${trigUri}>`;
+
+            return `SELECT ?s ?p ?o
+WHERE {
+    GRAPH ${graphRef} {
+        ?s ?p ?o .
+    }
+}`;
+        }
+
+        /**
+         * Обновляет SPARQL запрос в текстовом поле для текущего выбранного TriG
+         */
+        function updateSparqlQueryForTriG() {
+            if (currentMode !== 'vad-trig' || !selectedTrigUri) return;
+
+            const queryInput = document.getElementById('sparql-query');
+            if (!queryInput) return;
+
+            queryInput.value = getSparqlQueryForTriG(selectedTrigUri);
+        }
+
         let activeFilters = [...getFilterConfig(Mode).hiddenPredicates];
         let allPredicates = [];
 
@@ -2055,6 +2098,9 @@ WHERE {
 
             // Перевизуализируем граф для выбранного TriG
             revisualizeTrigVAD(trigUri);
+
+            // Обновляем SPARQL запрос для выбранного TriG
+            updateSparqlQueryForTriG();
         }
 
         /**
@@ -2411,7 +2457,10 @@ WHERE {
             const panelHtml = `
                 <div class="properties-panel visible" id="${panelId}" style="right: ${rightOffset}px; top: ${topOffset}px;">
                     <div class="properties-header" onmousedown="startDragPanel(event, '${panelId}')">
-                        <h3>${nodeLabel}</h3>
+                        <div class="properties-header-content">
+                            <div class="properties-header-title">Свойства объекта</div>
+                            <h3>${nodeLabel}</h3>
+                        </div>
                         <button class="properties-close-btn" onclick="closePropertiesPanel('${panelId}')">&times;</button>
                     </div>
                     <div class="properties-content">
@@ -2509,6 +2558,9 @@ WHERE {
 
             if (!nodeUri) return;
 
+            // Снимаем выделение с элементов TriG-дерева при клике на узел диаграммы
+            clearTriGTreeSelection();
+
             if (selectedNodeElement) {
                 selectedNodeElement.classList.remove('selected');
             }
@@ -2516,6 +2568,29 @@ WHERE {
             selectedNodeElement = nodeElement;
 
             showNodeProperties(nodeUri, nodeLabel);
+        }
+
+        /**
+         * Снимает выделение со всех элементов TriG-дерева
+         */
+        function clearTriGTreeSelection() {
+            // Снимаем выделение с TriG-элементов дерева
+            const treeItems = document.querySelectorAll('.trig-tree-item');
+            treeItems.forEach(item => {
+                item.classList.remove('selected', 'active');
+            });
+
+            // Снимаем выделение с процессов в дереве
+            const processItems = document.querySelectorAll('.process-item.process-selected');
+            processItems.forEach(item => {
+                item.classList.remove('process-selected');
+            });
+
+            // Снимаем подсветку процесса на диаграмме
+            const highlightedProcesses = document.querySelectorAll('.node.process-highlighted');
+            highlightedProcesses.forEach(node => {
+                node.classList.remove('process-highlighted');
+            });
         }
 
         // ============================================================================
@@ -4423,6 +4498,9 @@ vad:Trig11 {
                     addNodeClickHandlers();
                     closeAllPropertiesPanels();
 
+                    // Обновляем SPARQL запрос для выбранного TriG
+                    updateSparqlQueryForTriG();
+
                     console.log(`VAD TriG: Обработано ${quads.length} триплетов, отображается граф ${getPrefixedName(selectedTrigUri, prefixes)}`);
 
                     button.disabled = false;
@@ -4894,7 +4972,12 @@ vad:Trig11 {
         }
 
         function resetSparqlQuery() {
-            document.getElementById('sparql-query').value = defaultSparqlQuery;
+            // В режиме VAD TriG используем запрос с GRAPH clause
+            if (currentMode === 'vad-trig' && selectedTrigUri) {
+                document.getElementById('sparql-query').value = getSparqlQueryForTriG(selectedTrigUri);
+            } else {
+                document.getElementById('sparql-query').value = defaultSparqlQuery;
+            }
             document.getElementById('sparql-results').style.display = 'none';
         }
 
