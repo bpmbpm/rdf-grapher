@@ -1,6 +1,7 @@
 ### old
 
 ### index4fin1.html
+https://bpmbpm.github.io/rdf-grapher/ver4p/old/index4fin1.html  
 После нее:  
 Технические характеристики
 - Добавлена ​​новая generateVadNodeId(uri, prefixes)функция, которая:
