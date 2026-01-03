@@ -239,14 +239,6 @@
             color: #333;
         }
 
-        .tech-info {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #fff3e0;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-
         a {
             color: #1976D2;
         }
@@ -720,23 +712,7 @@
     <!-- Контейнер для панелей свойств узлов -->
     <div id="properties-panels-container"></div>
 
-    <h1>RDF Grapher ver4p</h1>
-
     <div class="description">
-        <p>
-            <strong>RDF Grapher ver4p</strong> — сервис для парсинга RDF данных и их визуализации в виде графа
-            с поддержкой режима VAD (Value Added Chain Diagram).
-            Этот сервис является расширенным аналогом <a href="https://www.ldf.fi/service/rdf-grapher" target="_blank">LDF RDF Grapher</a>.
-        </p>
-        <p>
-            <strong>Новые возможности ver4p:</strong>
-            <ul>
-                <li><strong>Режим VAD:</strong> визуализация цепочки добавленной стоимости с процессами и исполнителями</li>
-                <li>Процессы отображаются как cds-фигуры (chevron) с зеленой заливкой</li>
-                <li>Исполнители процессов показываются как подписи под процессами</li>
-                <li>Валидация данных на соответствие схеме VAD</li>
-            </ul>
-        </p>
         <p>
             <strong>Загрузить пример RDF данных:</strong>
             <span class="example-link" onclick="loadExampleTurtle()">Turtle</span> |
@@ -877,28 +853,6 @@ WHERE {
             </div>
             <div class="filter-content" id="filter-content"></div>
         </div>
-    </div>
-
-    <div class="tech-info">
-        <h3>Используемые технологии:</h3>
-        <ul>
-            <li>
-                <strong>N3.js</strong> — JavaScript библиотека для парсинга RDF
-                — <a href="https://github.com/rdfjs/N3.js" target="_blank">GitHub</a>
-            </li>
-            <li>
-                <strong>Viz.js</strong> — WebAssembly версия
-                <a href="http://graphviz.org/" target="_blank">Graphviz</a> для браузера
-                — <a href="https://github.com/mdaines/viz-js" target="_blank">GitHub</a>
-            </li>
-        </ul>
-        <p>
-            Этот сервис работает полностью на стороне клиента (в браузере)
-            и не требует серверной части, что позволяет размещать его на GitHub Pages.
-        </p>
-        <p>
-            <strong>Онтология VAD:</strong> <a href="ontology.md" target="_blank">ontology.md</a>
-        </p>
     </div>
 
     <!-- Подключение библиотеки N3.js для парсинга RDF -->
@@ -2079,6 +2033,20 @@ ex:organizations {
             return 'node' + Math.abs(hash);
         }
 
+        /**
+         * Генерирует ID узла для VAD режима на основе RDF идентификатора.
+         * Преобразует prefixed name (например, vad:Process1) в валидный DOT ID (vad_Process1).
+         * @param {string} uri - URI узла
+         * @param {Object} prefixes - Словарь префиксов
+         * @returns {string} - Валидный DOT ID
+         */
+        function generateVadNodeId(uri, prefixes) {
+            const prefixedName = getPrefixedName(uri, prefixes);
+            // Заменяем ':' на '_' для получения валидного DOT ID
+            // Также заменяем другие недопустимые символы на '_'
+            return prefixedName.replace(/[:\-\.\s]/g, '_');
+        }
+
         function isNameOrLabelPredicate(predicateLabel) {
             const lowerPredicate = predicateLabel.toLowerCase();
             return lowerPredicate.includes('name') || lowerPredicate.includes('label');
@@ -2339,7 +2307,7 @@ ex:organizations {
 
             // Сначала добавляем все узлы CDS
             visibleProcesses.forEach((processInfo, uri) => {
-                const nodeId = generateNodeId(uri);
+                const nodeId = generateVadNodeId(uri, prefixes);
                 const processName = processInfo.name || processInfo.label;
 
                 // Формируем HTML label с именем процесса (БЕЗ жирного шрифта)
@@ -2365,7 +2333,7 @@ ex:organizations {
             // ExecutorGroup объекты теперь кликабельны и показывают свойства
             dot += '    // ExecutorGroup узлы (эллипсы с желтоватой заливкой)\n';
             visibleProcesses.forEach((processInfo, uri) => {
-                const nodeId = generateNodeId(uri);
+                const nodeId = generateVadNodeId(uri, prefixes);
 
                 // Получаем список исполнителей
                 let executorsList = '';
@@ -2410,7 +2378,7 @@ ex:organizations {
             processOrder.forEach(uri => {
                 if (visibleProcesses.has(uri)) {
                     const processInfo = visibleProcesses.get(uri);
-                    const nodeId = generateNodeId(uri);
+                    const nodeId = generateVadNodeId(uri, prefixes);
                     cdsNodeIds.push(nodeId);
                     nodeIdToUri.set(nodeId, uri);
 
@@ -2479,7 +2447,7 @@ ex:organizations {
             // Добавляем видимые связи vad:hasExecutor между CDS и ExecutorGroup
             dot += '    // Связи vad:hasExecutor - видимые ребра от процессов к группам исполнителей\n';
             visibleProcesses.forEach((processInfo, uri) => {
-                const nodeId = generateNodeId(uri);
+                const nodeId = generateVadNodeId(uri, prefixes);
 
                 let hasExecutorGroup = false;
                 if (processInfo.executorGroup && executorGroups.has(processInfo.executorGroup)) {
@@ -2504,8 +2472,8 @@ ex:organizations {
             hasNextEdges.forEach(edge => {
                 // Проверяем, что оба процесса видимы
                 if (visibleProcesses.has(edge.from) && visibleProcesses.has(edge.to)) {
-                    const fromId = generateNodeId(edge.from);
-                    const toId = generateNodeId(edge.to);
+                    const fromId = generateVadNodeId(edge.from, prefixes);
+                    const toId = generateVadNodeId(edge.to, prefixes);
 
                     // Все ребра hasNext используют порты East -> West (выход справа, вход слева)
                     // Это обеспечивает единообразное направление связей согласно требованиям issue #58

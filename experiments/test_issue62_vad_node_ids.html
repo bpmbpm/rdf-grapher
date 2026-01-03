@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Issue #62 - VAD Node IDs</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .pass { background-color: #d4edda; border: 1px solid #c3e6cb; }
+        .fail { background-color: #f8d7da; border: 1px solid #f5c6cb; }
+        pre { background-color: #f5f5f5; padding: 10px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test Issue #62 - VAD Node ID Generation</h1>
+    <div id="results"></div>
+
+    <script>
+        // Test functions
+        function getPrefixedName(uri, prefixes) {
+            if (typeof uri !== 'string') return String(uri);
+            for (const [prefix, namespace] of Object.entries(prefixes)) {
+                if (uri.startsWith(namespace)) {
+                    const localName = uri.substring(namespace.length);
+                    return prefix + ':' + localName;
+                }
+            }
+            // Return local name if no prefix matches
+            const hashIndex = uri.lastIndexOf('#');
+            const slashIndex = uri.lastIndexOf('/');
+            const index = Math.max(hashIndex, slashIndex);
+            if (index !== -1 && index < uri.length - 1) {
+                return uri.substring(index + 1);
+            }
+            return uri;
+        }
+
+        function generateVadNodeId(uri, prefixes) {
+            const prefixedName = getPrefixedName(uri, prefixes);
+            // Replace ':' with '_' to get valid DOT ID
+            // Also replace other invalid characters with '_'
+            return prefixedName.replace(/[:\-\.\s]/g, '_');
+        }
+
+        // Test cases
+        const prefixes = {
+            'vad': 'http://example.org/vad#',
+            'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+            'rdfs': 'http://www.w3.org/2000/01/rdf-schema#'
+        };
+
+        const testCases = [
+            { uri: 'http://example.org/vad#Process1', expected: 'vad_Process1' },
+            { uri: 'http://example.org/vad#Process2', expected: 'vad_Process2' },
+            { uri: 'http://example.org/vad#ExecutorGroup1', expected: 'vad_ExecutorGroup1' },
+            { uri: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', expected: 'rdf_type' },
+            { uri: 'http://example.org/vad#My-Process', expected: 'vad_My_Process' },
+            { uri: 'http://example.org/vad#My.Process', expected: 'vad_My_Process' },
+        ];
+
+        const resultsDiv = document.getElementById('results');
+        let allPassed = true;
+
+        testCases.forEach((testCase, index) => {
+            const result = generateVadNodeId(testCase.uri, prefixes);
+            const passed = result === testCase.expected;
+            if (!passed) allPassed = false;
+
+            const div = document.createElement('div');
+            div.className = `test-result ${passed ? 'pass' : 'fail'}`;
+            div.innerHTML = `
+                <strong>Test ${index + 1}:</strong> ${passed ? 'PASS' : 'FAIL'}<br>
+                <strong>URI:</strong> ${testCase.uri}<br>
+                <strong>Expected:</strong> ${testCase.expected}<br>
+                <strong>Got:</strong> ${result}
+            `;
+            resultsDiv.appendChild(div);
+        });
+
+        // Summary
+        const summary = document.createElement('div');
+        summary.className = `test-result ${allPassed ? 'pass' : 'fail'}`;
+        summary.innerHTML = `<strong>Summary:</strong> ${allPassed ? 'All tests passed!' : 'Some tests failed!'}`;
+        resultsDiv.insertBefore(summary, resultsDiv.firstChild);
+
+        // Test executor group ID format
+        const executorTestDiv = document.createElement('div');
+        executorTestDiv.className = 'test-result pass';
+        const processId = generateVadNodeId('http://example.org/vad#Process1', prefixes);
+        const executorGroupId = `${processId}_exec`;
+        executorTestDiv.innerHTML = `
+            <strong>Executor Group ID Test:</strong><br>
+            <strong>Process ID:</strong> ${processId}<br>
+            <strong>Executor Group ID:</strong> ${executorGroupId}<br>
+            <strong>Expected format:</strong> vad_Process1_exec<br>
+            <strong>Result:</strong> ${executorGroupId === 'vad_Process1_exec' ? 'PASS' : 'FAIL'}
+        `;
+        resultsDiv.appendChild(executorTestDiv);
+    </script>
+</body>
+</html>
