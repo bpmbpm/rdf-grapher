@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Test TriG VAD Parsing</title>
+    <script src="https://cdn.jsdelivr.net/npm/n3@1.17.0/browser/n3.min.js"></script>
+</head>
+<body>
+    <h1>Test TriG VAD Parsing</h1>
+    <div id="output"></div>
+    <script>
+        const exampleTrigVAD = `# Пример TriG VAD
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vad: <http://example.org/vad#> .
+
+# Именованный граф Trig1 с меткой схемы
+vad:Trig1 rdfs:label "Схема процесса TriG1" .
+
+vad:Trig1 {
+    vad:Process1 rdf:type vad:Process ;
+        rdfs:label "Процесс 1" .
+}`;
+
+        const parser = new N3.Parser({ format: 'trig' });
+        const quads = [];
+        let prefixes = {};
+
+        parser.parse(exampleTrigVAD, (error, quad, parsedPrefixes) => {
+            if (error) {
+                document.getElementById('output').innerHTML = '<p style="color:red;">Error: ' + error.message + '</p>';
+                return;
+            }
+            if (quad) {
+                quads.push(quad);
+            } else {
+                prefixes = parsedPrefixes || {};
+
+                let html = '<h2>Parsed Quads (' + quads.length + ')</h2>';
+                html += '<table border="1"><tr><th>Subject</th><th>Predicate</th><th>Object</th><th>Graph</th></tr>';
+
+                let namedGraphUri = null;
+                const graphLabels = new Map();
+
+                quads.forEach(q => {
+                    html += '<tr>';
+                    html += '<td>' + q.subject.value + '</td>';
+                    html += '<td>' + q.predicate.value + '</td>';
+                    html += '<td>' + q.object.value + '</td>';
+                    html += '<td>' + (q.graph ? q.graph.value : 'default') + '</td>';
+                    html += '</tr>';
+
+                    // Extract named graph
+                    if (q.graph && q.graph.value && q.graph.value !== '') {
+                        if (!namedGraphUri) {
+                            namedGraphUri = q.graph.value;
+                        }
+                    }
+                });
+                html += '</table>';
+
+                // Find label for named graph
+                quads.forEach(q => {
+                    const predicateUri = q.predicate.value;
+                    if (predicateUri === 'http://www.w3.org/2000/01/rdf-schema#label') {
+                        if (q.subject.value === namedGraphUri) {
+                            graphLabels.set(q.subject.value, q.object.value);
+                        }
+                    }
+                });
+
+                html += '<h2>Named Graph Info</h2>';
+                html += '<p>Named Graph URI: ' + (namedGraphUri || 'none') + '</p>';
+                html += '<p>Graph Label: ' + (graphLabels.get(namedGraphUri) || 'none') + '</p>';
+
+                if (namedGraphUri && graphLabels.has(namedGraphUri)) {
+                    html += '<p style="color:green;font-weight:bold;">SUCCESS: Graph title would be: "' + graphLabels.get(namedGraphUri) + '"</p>';
+                } else {
+                    html += '<p style="color:orange;">Note: No graph label found</p>';
+                }
+
+                document.getElementById('output').innerHTML = html;
+            }
+        });
+    </script>
+</body>
+</html>
