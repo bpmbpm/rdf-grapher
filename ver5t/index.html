@@ -631,8 +631,17 @@
         #output svg .node.selected polygon,
         #output svg .node.selected ellipse,
         #output svg .node.selected path {
-            stroke-width: 3;
+            stroke-width: 4px;
             stroke: #FF5722;
+            filter: drop-shadow(0 0 8px #FF5722);
+        }
+
+        #vad-trig-output svg .node.selected polygon,
+        #vad-trig-output svg .node.selected ellipse,
+        #vad-trig-output svg .node.selected path {
+            stroke-width: 4px;
+            stroke: #FF5722;
+            filter: drop-shadow(0 0 8px #FF5722);
         }
 
         .filter-panel {
@@ -721,21 +730,21 @@
             align-items: stretch;
         }
 
-        .vad-trig-right-panels {
+        .vad-trig-left-panels {
             width: 350px;
             min-width: 280px;
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
             gap: 15px;
-            order: 2; /* Panels on the right */
+            order: 1; /* Panels on the left */
         }
 
         .vad-trig-diagram-wrapper {
             flex: 1;
             display: flex;
             flex-direction: column;
-            order: 1; /* Diagram on the left */
+            order: 2; /* Diagram on the right */
         }
 
         .vad-trig-result {
@@ -1104,8 +1113,8 @@
                 </div>
             </div>
 
-            <!-- Панели справа -->
-            <div class="vad-trig-right-panels">
+            <!-- Панели слева -->
+            <div class="vad-trig-left-panels">
                 <!-- Панель дерева TriG -->
                 <div class="trig-tree-panel">
                     <div class="trig-tree-header">Дерево TriG</div>
@@ -2466,12 +2475,17 @@ WHERE {
         // ============================================================================
 
         function addNodeClickHandlers() {
-            const svg = document.querySelector('#output svg');
-            if (!svg) return;
+            // Add click handlers to both regular output and VAD TriG output
+            const regularSvg = document.querySelector('#output svg');
+            const vadTrigSvg = document.querySelector('#vad-trig-output svg');
 
-            const nodes = svg.querySelectorAll('.node');
-            nodes.forEach(node => {
-                node.addEventListener('click', handleNodeClick);
+            const svgElements = [regularSvg, vadTrigSvg].filter(svg => svg !== null);
+
+            svgElements.forEach(svg => {
+                const nodes = svg.querySelectorAll('.node');
+                nodes.forEach(node => {
+                    node.addEventListener('click', handleNodeClick);
+                });
             });
         }
 
@@ -4817,12 +4831,23 @@ vad:Trig11 {
                 selectedNodeElement = null;
             }
 
-            // Ищем узлы на графе по URI
-            const output = document.getElementById('output');
-            const svg = output ? output.querySelector('svg') : null;
-            if (!svg) return;
+            // Ищем узлы на графе по URI (в обоих контейнерах: regular и VAD TriG)
+            const regularOutput = document.getElementById('output');
+            const vadTrigOutput = document.getElementById('vad-trig-output');
+            const regularSvg = regularOutput ? regularOutput.querySelector('svg') : null;
+            const vadTrigSvg = vadTrigOutput ? vadTrigOutput.querySelector('svg') : null;
 
-            const nodes = svg.querySelectorAll('.node');
+            // Collect all nodes from both SVG containers
+            let allNodes = [];
+            if (regularSvg) {
+                allNodes = allNodes.concat(Array.from(regularSvg.querySelectorAll('.node')));
+            }
+            if (vadTrigSvg) {
+                allNodes = allNodes.concat(Array.from(vadTrigSvg.querySelectorAll('.node')));
+            }
+
+            if (allNodes.length === 0) return;
+
             let foundNode = null;
             let foundUri = null;
             let foundLabel = null;
@@ -4832,7 +4857,7 @@ vad:Trig11 {
                 for (const [label, info] of Object.entries(nodeLabelToUri)) {
                     if (info.uri === uri) {
                         // Нашли маппинг, ищем узел по dotId
-                        for (const node of nodes) {
+                        for (const node of allNodes) {
                             const titleElement = node.querySelector('title');
                             if (titleElement && titleElement.textContent === info.dotId) {
                                 foundNode = node;
