@@ -750,7 +750,9 @@
         }
 
         .vad-trig-diagram-wrapper {
-            flex: 1;
+            width: 350px;
+            min-width: 280px;
+            flex-shrink: 0;
             display: flex;
             flex-direction: column;
             order: 2; /* Diagram on the right */
@@ -788,7 +790,8 @@
         }
 
         .vad-trig-zoom-container {
-            height: 100%;
+            min-width: min-content;
+            min-height: min-content;
         }
 
         .vad-trig-zoom-controls {
@@ -997,6 +1000,36 @@
             margin: 10px 0;
             font-family: 'Consolas', 'Monaco', monospace;
             white-space: pre-wrap;
+        }
+
+        .trig-property-value-container {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .trig-property-value-container .trig-property-value {
+            flex: 1;
+        }
+
+        .copy-id-btn {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 11px;
+            flex-shrink: 0;
+            transition: background-color 0.2s;
+        }
+
+        .copy-id-btn:hover {
+            background-color: #1976D2;
+        }
+
+        .copy-id-btn.copied {
+            background-color: #4CAF50;
         }
     </style>
 </head>
@@ -2050,10 +2083,13 @@ WHERE {
             // Основные свойства TriG
             const prefixedUri = getPrefixedName(trigUri, prefixes);
 
-            // URI
+            // URI with copy button
             html += `<div class="trig-property-item">`;
             html += `<div class="trig-property-predicate">URI</div>`;
+            html += `<div class="trig-property-value-container">`;
             html += `<div class="trig-property-value uri">${escapeHtml(prefixedUri)}</div>`;
+            html += `<button class="copy-id-btn" onclick="copyObjectId('${escapeHtml(trigUri)}', this)">Копировать</button>`;
+            html += `</div>`;
             html += `</div>`;
 
             // Label
@@ -3477,6 +3513,47 @@ vad:Trig11 {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        /**
+         * Копирует ID объекта в буфер обмена
+         * @param {string} id - ID для копирования
+         * @param {HTMLElement} button - Кнопка, которая была нажата
+         */
+        function copyObjectId(id, button) {
+            navigator.clipboard.writeText(id).then(() => {
+                // Показываем подтверждение
+                const originalText = button.textContent;
+                button.textContent = 'Скопировано!';
+                button.classList.add('copied');
+
+                // Возвращаем оригинальный текст через 2 секунды
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Ошибка копирования:', err);
+                // Fallback для старых браузеров
+                const textArea = document.createElement('textarea');
+                textArea.value = id;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-9999px';
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    button.textContent = 'Скопировано!';
+                    button.classList.add('copied');
+                    setTimeout(() => {
+                        button.textContent = 'Копировать';
+                        button.classList.remove('copied');
+                    }, 2000);
+                } catch (e) {
+                    console.error('Fallback copy failed:', e);
+                }
+                document.body.removeChild(textArea);
+            });
         }
 
         function wrapTextByWords(text, maxLength) {
