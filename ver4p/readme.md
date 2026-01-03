@@ -8,12 +8,8 @@ RDF Grapher ver4p — сервис для парсинга RDF данных и �
 - Исполнители процессов показываются как подписи под процессами
 - Валидация данных на соответствие схеме VAD
 
-### dot
-- https://graphviz.org/doc/info/shapes.html
-
-### test
+### run
 https://bpmbpm.github.io/rdf-grapher/ver4p/
-
 
 ### dot
 - [xlabel GraphvizOnline](
@@ -22,5 +18,5 @@ https://dreampuf.github.io/GraphvizOnline/?engine=dot#digraph%20G%20%7B%0A%0A%20
 - https://github.com/ppareit/graphviz-dot-mode/tree/master
 - https://hackage-content.haskell.org/package/graphviz-2999.20.2.1/docs/Data-GraphViz-Attributes.html
 - https://lib.custis.ru/Graphviz
-
+- https://graphviz.org/doc/info/shapes.html
 
