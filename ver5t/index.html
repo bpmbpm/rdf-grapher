@@ -708,6 +708,182 @@
             background-color: #fff3e0 !important;
             outline: 2px solid #FF5722;
         }
+
+        /* ============================================================================
+           СТИЛИ ДЛЯ РЕЖИМА VAD TriG
+           ============================================================================ */
+
+        .vad-trig-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .vad-trig-left-panels {
+            width: 350px;
+            min-width: 280px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .vad-trig-result {
+            flex: 1;
+        }
+
+        .trig-tree-panel {
+            background-color: white;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-height: 40vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .trig-tree-header {
+            padding: 12px 15px;
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .trig-tree-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .trig-tree-item {
+            padding: 6px 10px;
+            margin: 2px 0;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+
+        .trig-tree-item:hover {
+            background-color: #e8f5e9;
+        }
+
+        .trig-tree-item.selected {
+            background-color: #c8e6c9;
+            border-left: 3px solid #4CAF50;
+        }
+
+        .trig-tree-item.active {
+            background-color: #a5d6a7;
+            font-weight: bold;
+        }
+
+        .trig-tree-children {
+            margin-left: 20px;
+            border-left: 1px dashed #ccc;
+            padding-left: 10px;
+        }
+
+        .trig-tree-toggle {
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+            cursor: pointer;
+            margin-right: 5px;
+            color: #666;
+        }
+
+        .trig-tree-toggle:hover {
+            color: #4CAF50;
+        }
+
+        .trig-tree-label {
+            color: #333;
+        }
+
+        .trig-tree-id {
+            color: #888;
+            font-size: 11px;
+            margin-left: 5px;
+        }
+
+        .trig-properties-panel {
+            background-color: white;
+            border: 2px solid #2196F3;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-height: 35vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .trig-properties-header {
+            padding: 12px 15px;
+            background-color: #2196F3;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .trig-properties-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .trig-property-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 3px solid #2196F3;
+        }
+
+        .trig-property-predicate {
+            color: #1976D2;
+            font-weight: bold;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
+
+        .trig-property-value {
+            color: #333;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            word-break: break-all;
+        }
+
+        .trig-property-value.literal {
+            color: #6a1b9a;
+        }
+
+        .trig-property-value.uri {
+            color: #1976D2;
+        }
+
+        .trig-properties-empty {
+            color: #666;
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .trig-error {
+            color: #d32f2f;
+            background-color: #ffebee;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -722,7 +898,8 @@
             <span class="example-link" onclick="loadExampleNTriples()">N-Triples</span> |
             <span class="example-link" onclick="loadExampleNQuads()">N-Quads</span> |
             <span class="example-link" onclick="loadExampleTriG()">TriG</span> |
-            <span class="example-link" onclick="loadExampleTrigVAD()">Trig VAD</span>
+            <span class="example-link" onclick="loadExampleTrigVAD()">Trig VAD</span> |
+            <span class="example-link" onclick="loadExampleTrigVADv2()">Trig VADv2</span>
         </p>
     </div>
 
@@ -767,6 +944,7 @@
                     <option value="base">Базовый режим</option>
                     <option value="aggregation">Режим агрегации</option>
                     <option value="vad">Режим VAD</option>
+                    <option value="vad-trig">Режим VAD TriG</option>
                 </select>
                 <div class="mode-description" id="mode-description">
                     С выделением типов объектов и предикатов цветом и формами
@@ -806,6 +984,32 @@
 
     <div class="result-container" id="result-container">
         <h2>Результат:</h2>
+
+        <!-- VAD TriG режим: контейнер с двумя панелями слева и результатом справа -->
+        <div class="vad-trig-container" id="vad-trig-container" style="display: none;">
+            <div class="vad-trig-left-panels">
+                <!-- Панель дерева TriG -->
+                <div class="trig-tree-panel">
+                    <div class="trig-tree-header">Дерево TriG</div>
+                    <div class="trig-tree-content" id="trig-tree-content">
+                        <div class="trig-properties-empty">Выберите данные TriG</div>
+                    </div>
+                </div>
+
+                <!-- Панель свойств TriG -->
+                <div class="trig-properties-panel">
+                    <div class="trig-properties-header">Свойства TriG</div>
+                    <div class="trig-properties-content" id="trig-properties-content">
+                        <div class="trig-properties-empty">Выберите TriG в дереве</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="vad-trig-result" id="vad-trig-result">
+                <!-- Результат визуализации будет размещен здесь в VAD TriG режиме -->
+            </div>
+        </div>
+
         <div class="zoom-controls" id="zoom-controls" style="display: none;">
             <button onclick="zoomOut()">-</button>
             <span id="zoom-level">100%</span>
@@ -919,7 +1123,7 @@ WHERE {
                 return FilterBase;
             } else if (mode === 'aggregation') {
                 return FilterAggregation;
-            } else if (mode === 'vad') {
+            } else if (mode === 'vad' || mode === 'vad-trig') {
                 return FilterVAD;
             }
             return Filter;
@@ -1279,6 +1483,370 @@ WHERE {
 
         let activeFilters = [...getFilterConfig(Mode).hiddenPredicates];
         let allPredicates = [];
+
+        // ============================================================================
+        // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ VAD TriG РЕЖИМА
+        // ============================================================================
+
+        let trigHierarchy = {};  // Иерархия TriG графов: { uri -> { label, hasParent, children, quads } }
+        let selectedTrigUri = null;  // Текущий выбранный TriG для отображения
+        let allTrigGraphs = [];  // Список всех TriG графов
+
+        // ============================================================================
+        // ФУНКЦИИ ДЛЯ VAD TriG РЕЖИМА
+        // ============================================================================
+
+        /**
+         * Парсит иерархию TriG графов из квадов
+         * @param {Array} quads - Все квады из RDF данных
+         * @param {Object} prefixes - Словарь префиксов
+         * @returns {Object} - { valid: boolean, errors: [], hierarchy: {}, rootTrigUri: string }
+         */
+        function parseTriGHierarchy(quads, prefixes) {
+            const errors = [];
+            const hierarchy = {};
+            const graphUris = new Set();
+
+            // Собираем все уникальные именованные графы
+            quads.forEach(quad => {
+                if (quad.graph && quad.graph.value && quad.graph.value !== '') {
+                    graphUris.add(quad.graph.value);
+                }
+            });
+
+            // Инициализируем структуру для каждого графа
+            graphUris.forEach(graphUri => {
+                hierarchy[graphUri] = {
+                    uri: graphUri,
+                    label: null,
+                    hasParent: null,
+                    children: [],
+                    quads: [],
+                    processes: []
+                };
+            });
+
+            // Собираем квады для каждого графа
+            quads.forEach(quad => {
+                const graphUri = quad.graph?.value || '';
+                if (graphUri && hierarchy[graphUri]) {
+                    hierarchy[graphUri].quads.push(quad);
+                }
+            });
+
+            // Ищем rdfs:label и vad:hasParent для каждого графа (определяются вне графа)
+            quads.forEach(quad => {
+                const subjectUri = quad.subject.value;
+                const predicateUri = quad.predicate.value;
+                const predicateLabel = getPrefixedName(predicateUri, prefixes);
+
+                // Проверяем, является ли субъект именованным графом
+                if (hierarchy[subjectUri]) {
+                    // rdfs:label для графа
+                    if (predicateLabel === 'rdfs:label' || predicateUri === 'http://www.w3.org/2000/01/rdf-schema#label') {
+                        hierarchy[subjectUri].label = quad.object.value;
+                    }
+
+                    // vad:hasParent для графа
+                    if (predicateLabel === 'vad:hasParent' || predicateUri === 'http://example.org/vad#hasParent') {
+                        hierarchy[subjectUri].hasParent = quad.object.value;
+                    }
+                }
+            });
+
+            // Проверяем, что все графы имеют hasParent
+            Object.values(hierarchy).forEach(graphInfo => {
+                if (!graphInfo.hasParent) {
+                    const graphLabel = getPrefixedName(graphInfo.uri, prefixes);
+                    errors.push({
+                        graph: graphLabel,
+                        message: `TriG "${graphLabel}" не имеет свойства hasParent. В режиме VAD TriG каждый TriG граф должен иметь свойство hasParent.`
+                    });
+                }
+            });
+
+            if (errors.length > 0) {
+                return { valid: false, errors, hierarchy: null, rootTrigUri: null };
+            }
+
+            // Строим дерево: находим корневые элементы (hasParent = vad:root)
+            const rootUri = 'http://example.org/vad#root';
+            let rootTrigUri = null;
+
+            Object.values(hierarchy).forEach(graphInfo => {
+                const parentUri = graphInfo.hasParent;
+                const parentLabel = getPrefixedName(parentUri, prefixes);
+
+                // Проверяем, является ли родитель "root"
+                if (parentUri === rootUri || parentLabel === 'vad:root') {
+                    // Это корневой элемент
+                    rootTrigUri = graphInfo.uri;
+                } else if (hierarchy[parentUri]) {
+                    // Добавляем как дочерний элемент к родителю
+                    hierarchy[parentUri].children.push(graphInfo.uri);
+                }
+            });
+
+            // Собираем информацию о процессах для каждого графа
+            Object.values(hierarchy).forEach(graphInfo => {
+                graphInfo.quads.forEach(quad => {
+                    const predicateUri = quad.predicate.value;
+                    const predicateLabel = getPrefixedName(predicateUri, prefixes);
+
+                    // Если это rdf:type и тип = vad:Process
+                    if (predicateLabel === 'rdf:type' || predicateUri === 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type') {
+                        const typeUri = quad.object.value;
+                        const typeLabel = getPrefixedName(typeUri, prefixes);
+                        if (typeLabel === 'vad:Process' || typeUri === 'http://example.org/vad#Process') {
+                            graphInfo.processes.push(quad.subject.value);
+                        }
+                    }
+                });
+            });
+
+            return { valid: true, errors: [], hierarchy, rootTrigUri };
+        }
+
+        /**
+         * Форматирует ошибки VAD TriG для отображения
+         * @param {Array} errors - Массив ошибок
+         * @returns {string} - Отформатированное сообщение
+         */
+        function formatVADTriGErrors(errors) {
+            let message = 'ОШИБКА ВАЛИДАЦИИ VAD TriG\n';
+            message += '═══════════════════════════════════════\n\n';
+
+            errors.forEach((error, index) => {
+                message += `Ошибка ${index + 1}:\n`;
+                message += `  TriG граф: ${error.graph}\n`;
+                message += `  ${error.message}\n\n`;
+            });
+
+            message += '═══════════════════════════════════════\n';
+            message += `Всего ошибок: ${errors.length}\n`;
+            message += '\nВ режиме VAD TriG каждый TriG граф должен иметь свойство vad:hasParent.\n';
+            message += 'Корневой граф должен иметь hasParent = vad:root.\n';
+            message += 'Дочерние графы указывают на родительский граф через hasParent.';
+
+            return message;
+        }
+
+        /**
+         * Строит HTML для дерева TriG
+         * @param {string} trigUri - URI текущего TriG
+         * @param {Object} hierarchy - Иерархия TriG
+         * @param {Object} prefixes - Словарь префиксов
+         * @param {number} level - Уровень вложенности (для отступов)
+         * @returns {string} - HTML дерева
+         */
+        function buildTriGTreeHtml(trigUri, hierarchy, prefixes, level = 0) {
+            const graphInfo = hierarchy[trigUri];
+            if (!graphInfo) return '';
+
+            const prefixedUri = getPrefixedName(trigUri, prefixes);
+            const localName = getLocalName(trigUri);
+            const displayLabel = graphInfo.label || localName;
+            const isSelected = trigUri === selectedTrigUri;
+            const hasChildren = graphInfo.children.length > 0;
+
+            let html = '';
+
+            // Элемент дерева
+            html += `<div class="trig-tree-item ${isSelected ? 'selected active' : ''}"
+                         data-trig-uri="${escapeHtml(trigUri)}"
+                         onclick="selectTriG('${escapeHtml(trigUri)}')">`;
+
+            // Значок раскрытия/закрытия
+            if (hasChildren) {
+                html += `<span class="trig-tree-toggle">▼</span>`;
+            } else {
+                html += `<span class="trig-tree-toggle"></span>`;
+            }
+
+            // Метка с id
+            html += `<span class="trig-tree-label">${escapeHtml(displayLabel)}</span>`;
+            html += `<span class="trig-tree-id">(${escapeHtml(localName)})</span>`;
+            html += `</div>`;
+
+            // Дочерние элементы
+            if (hasChildren) {
+                html += `<div class="trig-tree-children">`;
+                graphInfo.children.forEach(childUri => {
+                    html += buildTriGTreeHtml(childUri, hierarchy, prefixes, level + 1);
+                });
+                html += `</div>`;
+            }
+
+            return html;
+        }
+
+        /**
+         * Отображает дерево TriG
+         * @param {Object} hierarchy - Иерархия TriG
+         * @param {string} rootUri - URI корневого TriG
+         * @param {Object} prefixes - Словарь префиксов
+         */
+        function displayTriGTree(hierarchy, rootUri, prefixes) {
+            const treeContent = document.getElementById('trig-tree-content');
+            if (!treeContent) return;
+
+            if (!rootUri || !hierarchy[rootUri]) {
+                treeContent.innerHTML = '<div class="trig-properties-empty">Нет доступных TriG графов</div>';
+                return;
+            }
+
+            const html = buildTriGTreeHtml(rootUri, hierarchy, prefixes, 0);
+            treeContent.innerHTML = html;
+        }
+
+        /**
+         * Отображает свойства выбранного TriG
+         * @param {string} trigUri - URI TriG
+         * @param {Object} hierarchy - Иерархия TriG
+         * @param {Object} prefixes - Словарь префиксов
+         */
+        function displayTriGProperties(trigUri, hierarchy, prefixes) {
+            const propertiesContent = document.getElementById('trig-properties-content');
+            if (!propertiesContent) return;
+
+            const graphInfo = hierarchy[trigUri];
+            if (!graphInfo) {
+                propertiesContent.innerHTML = '<div class="trig-properties-empty">Выберите TriG в дереве</div>';
+                return;
+            }
+
+            let html = '';
+
+            // Основные свойства TriG
+            const prefixedUri = getPrefixedName(trigUri, prefixes);
+
+            // URI
+            html += `<div class="trig-property-item">`;
+            html += `<div class="trig-property-predicate">URI</div>`;
+            html += `<div class="trig-property-value uri">${escapeHtml(prefixedUri)}</div>`;
+            html += `</div>`;
+
+            // Label
+            if (graphInfo.label) {
+                html += `<div class="trig-property-item">`;
+                html += `<div class="trig-property-predicate">rdfs:label</div>`;
+                html += `<div class="trig-property-value literal">"${escapeHtml(graphInfo.label)}"</div>`;
+                html += `</div>`;
+            }
+
+            // hasParent
+            if (graphInfo.hasParent) {
+                const parentLabel = getPrefixedName(graphInfo.hasParent, prefixes);
+                html += `<div class="trig-property-item">`;
+                html += `<div class="trig-property-predicate">vad:hasParent</div>`;
+                html += `<div class="trig-property-value uri">${escapeHtml(parentLabel)}</div>`;
+                html += `</div>`;
+            }
+
+            // Количество процессов
+            html += `<div class="trig-property-item">`;
+            html += `<div class="trig-property-predicate">Процессы (vad:Process)</div>`;
+            html += `<div class="trig-property-value">${graphInfo.processes.length} шт.</div>`;
+            html += `</div>`;
+
+            // Количество дочерних TriG
+            if (graphInfo.children.length > 0) {
+                html += `<div class="trig-property-item">`;
+                html += `<div class="trig-property-predicate">Дочерние TriG</div>`;
+                html += `<div class="trig-property-value">${graphInfo.children.length} шт.</div>`;
+                html += `</div>`;
+            }
+
+            // Количество триплетов
+            html += `<div class="trig-property-item">`;
+            html += `<div class="trig-property-predicate">Триплеты</div>`;
+            html += `<div class="trig-property-value">${graphInfo.quads.length} шт.</div>`;
+            html += `</div>`;
+
+            propertiesContent.innerHTML = html;
+        }
+
+        /**
+         * Обработчик выбора TriG в дереве
+         * @param {string} trigUri - URI выбранного TriG
+         */
+        function selectTriG(trigUri) {
+            selectedTrigUri = trigUri;
+
+            // Обновляем выделение в дереве
+            const treeItems = document.querySelectorAll('.trig-tree-item');
+            treeItems.forEach(item => {
+                if (item.getAttribute('data-trig-uri') === trigUri) {
+                    item.classList.add('selected', 'active');
+                } else {
+                    item.classList.remove('selected', 'active');
+                }
+            });
+
+            // Отображаем свойства выбранного TriG
+            displayTriGProperties(trigUri, trigHierarchy, currentPrefixes);
+
+            // Перевизуализируем граф для выбранного TriG
+            revisualizeTrigVAD(trigUri);
+        }
+
+        /**
+         * Перевизуализирует VAD для выбранного TriG
+         * @param {string} trigUri - URI TriG для отображения
+         */
+        async function revisualizeTrigVAD(trigUri) {
+            const graphInfo = trigHierarchy[trigUri];
+            if (!graphInfo) return;
+
+            const layoutEngine = document.getElementById('layout-engine').value;
+
+            try {
+                // Используем квады только из выбранного графа
+                const filteredQuads = graphInfo.quads.filter(quad => {
+                    const predicateUri = quad.predicate.value;
+                    const predicateLabel = getPrefixedName(predicateUri, currentPrefixes);
+                    return !isPredicateHidden(predicateUri, predicateLabel);
+                });
+
+                // Генерируем DOT-код в режиме VAD
+                const originalMode = currentMode;
+                currentMode = 'vad';  // Используем логику VAD для рендеринга
+
+                // Временно заменяем currentQuads на квады выбранного графа
+                const originalQuads = currentQuads;
+                currentQuads = graphInfo.quads;
+
+                const dotCode = rdfToDot(filteredQuads, currentPrefixes);
+                currentDotCode = dotCode;
+                console.log('VAD TriG - Сгенерированный DOT-код:', dotCode);
+
+                // Восстанавливаем
+                currentQuads = originalQuads;
+                currentMode = originalMode;
+
+                const viz = await Viz.instance();
+                const svgString = viz.renderString(dotCode, { format: 'svg', engine: layoutEngine });
+
+                const output = document.getElementById('output');
+                output.innerHTML = svgString;
+                currentSvgElement = output.querySelector('svg');
+                addNodeClickHandlers();
+
+            } catch (error) {
+                console.error('Ошибка при перевизуализации VAD TriG:', error);
+            }
+        }
+
+        /**
+         * Показывает или скрывает панели VAD TriG режима
+         * @param {boolean} show - Показать или скрыть
+         */
+        function toggleVADTriGPanels(show) {
+            const vadTrigContainer = document.getElementById('vad-trig-container');
+            if (vadTrigContainer) {
+                vadTrigContainer.style.display = show ? 'flex' : 'none';
+            }
+        }
 
         // ============================================================================
         // ФУНКЦИИ РАБОТЫ СО СТИЛЯМИ
@@ -2136,6 +2704,296 @@ vad:Trig1 {
             document.getElementById('rdf-input').value = exampleTrigVAD;
             document.getElementById('input-format').value = 'trig';
             document.getElementById('visualization-mode').value = 'vad';
+            updateModeDescription();
+        }
+
+        /**
+         * Загружает пример TriG VADv2 с иерархией TriG графов
+         * Содержит:
+         * - Trig1: корневой граф (hasParent = root)
+         * - Trig11: дочерний граф (hasParent = Trig1)
+         */
+        function loadExampleTrigVADv2() {
+            const exampleTrigVADv2 = `# Пример TriG VADv2 (Value Added Chain Diagram с иерархией TriG)
+# Демонстрация иерархии TriG графов через hasParent
+
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix vad: <http://example.org/vad#> .
+
+# ============================================================================
+# Корневой TriG граф: Trig1 (hasParent = root)
+# ============================================================================
+vad:Trig1 rdfs:label "Схема процесса TriG1" ;
+    vad:hasParent vad:root .
+
+vad:Trig1 {
+    # Материнский процесс (не отображается в VAD режиме)
+    vad:Process0 rdf:type vad:Process ;
+        rdfs:label "Процесс 0" ;
+        dcterms:description "Материнский процесс для всей цепочки" .
+
+    # Процесс 1
+    vad:Process1 rdf:type vad:Process ;
+        rdfs:label "Процесс 1" ;
+        dcterms:description "Первый процесс в цепочке добавленной стоимости" ;
+        vad:hasExecutor vad:ExecutorGroup1 ;
+        vad:hasParent vad:Process0 ;
+        vad:hasNext vad:Process2 .
+
+    # Процесс 2
+    vad:Process2 rdf:type vad:Process ;
+        rdfs:label "Процесс 2" ;
+        dcterms:description "Второй процесс, выполняется после Процесса 1" ;
+        vad:hasExecutor vad:ExecutorGroup2 ;
+        vad:hasParent vad:Process0 ;
+        vad:hasNext vad:Process3, vad:Process4 .
+
+    # Процесс 3
+    vad:Process3 rdf:type vad:Process ;
+        rdfs:label "Процесс 3" ;
+        dcterms:description "Третий процесс в цепочке" ;
+        vad:hasExecutor vad:ExecutorGroup3 ;
+        vad:hasParent vad:Process0 ;
+        vad:hasNext vad:Process4 .
+
+    # Процесс 4
+    vad:Process4 rdf:type vad:Process ;
+        rdfs:label "Процесс 4" ;
+        dcterms:description "Четвёртый процесс в цепочке" ;
+        vad:hasExecutor vad:ExecutorGroup4 ;
+        vad:hasParent vad:Process0 ;
+        vad:hasNext vad:Process5 .
+
+    # Процесс 5
+    vad:Process5 rdf:type vad:Process ;
+        rdfs:label "Процесс 5" ;
+        dcterms:description "Пятый процесс в цепочке" ;
+        vad:hasExecutor vad:ExecutorGroup5 ;
+        vad:hasParent vad:Process0 ;
+        vad:hasNext vad:Process6 .
+
+    # Процесс 6
+    vad:Process6 rdf:type vad:Process ;
+        rdfs:label "Процесс 6" ;
+        dcterms:description "Шестой процесс в цепочке" ;
+        vad:hasExecutor vad:ExecutorGroup6 ;
+        vad:hasParent vad:Process0 ;
+        vad:hasNext vad:Process7 .
+
+    # Процесс 7
+    vad:Process7 rdf:type vad:Process ;
+        rdfs:label "Процесс 7" ;
+        dcterms:description "Седьмой процесс в цепочке" ;
+        vad:hasExecutor vad:ExecutorGroup7 ;
+        vad:hasParent vad:Process0 ;
+        vad:hasNext vad:Process8 .
+
+    # Процесс 8
+    vad:Process8 rdf:type vad:Process ;
+        rdfs:label "Процесс 8" ;
+        dcterms:description "Заключительный процесс в цепочке" ;
+        vad:hasExecutor vad:ExecutorGroup8 ;
+        vad:hasParent vad:Process0 .
+
+    # Группы исполнителей
+    vad:ExecutorGroup1 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 1" ;
+        vad:includes vad:Executor1 .
+
+    vad:ExecutorGroup2 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 2" ;
+        vad:includes vad:Executor1, vad:Executor2 .
+
+    vad:ExecutorGroup3 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 3" ;
+        vad:includes vad:Executor3 .
+
+    vad:ExecutorGroup4 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 4" ;
+        vad:includes vad:Executor3, vad:Executor4 .
+
+    vad:ExecutorGroup5 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 5" ;
+        vad:includes vad:Executor5, vad:Executor6 .
+
+    vad:ExecutorGroup6 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 6" ;
+        vad:includes vad:Executor7, vad:Executor8 .
+
+    vad:ExecutorGroup7 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 7" ;
+        vad:includes vad:Executor1, vad:Executor5 .
+
+    vad:ExecutorGroup8 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 8" ;
+        vad:includes vad:Executor2, vad:Executor7 .
+
+    # Исполнители
+    vad:Executor1 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 1" .
+
+    vad:Executor2 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 2" .
+
+    vad:Executor3 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 3" .
+
+    vad:Executor4 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 4" .
+
+    vad:Executor5 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 5" .
+
+    vad:Executor6 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 6" .
+
+    vad:Executor7 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 7" .
+
+    vad:Executor8 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 8" .
+}
+
+# ============================================================================
+# Дочерний TriG граф: Trig11 (hasParent = Trig1)
+# Все объекты имеют префикс 2 в номерах (Process21, Исполнитель 21 и т.д.)
+# ============================================================================
+vad:Trig11 rdfs:label "Схема процесса TriG11" ;
+    vad:hasParent vad:Trig1 .
+
+vad:Trig11 {
+    # Материнский процесс (не отображается в VAD режиме)
+    vad:Process20 rdf:type vad:Process ;
+        rdfs:label "Процесс 20" ;
+        dcterms:description "Материнский процесс для цепочки TriG11" .
+
+    # Процесс 21
+    vad:Process21 rdf:type vad:Process ;
+        rdfs:label "Процесс 21" ;
+        dcterms:description "Первый процесс в цепочке TriG11" ;
+        vad:hasExecutor vad:ExecutorGroup21 ;
+        vad:hasParent vad:Process20 ;
+        vad:hasNext vad:Process22 .
+
+    # Процесс 22
+    vad:Process22 rdf:type vad:Process ;
+        rdfs:label "Процесс 22" ;
+        dcterms:description "Второй процесс в цепочке TriG11" ;
+        vad:hasExecutor vad:ExecutorGroup22 ;
+        vad:hasParent vad:Process20 ;
+        vad:hasNext vad:Process23, vad:Process24 .
+
+    # Процесс 23
+    vad:Process23 rdf:type vad:Process ;
+        rdfs:label "Процесс 23" ;
+        dcterms:description "Третий процесс в цепочке TriG11" ;
+        vad:hasExecutor vad:ExecutorGroup23 ;
+        vad:hasParent vad:Process20 ;
+        vad:hasNext vad:Process24 .
+
+    # Процесс 24
+    vad:Process24 rdf:type vad:Process ;
+        rdfs:label "Процесс 24" ;
+        dcterms:description "Четвёртый процесс в цепочке TriG11" ;
+        vad:hasExecutor vad:ExecutorGroup24 ;
+        vad:hasParent vad:Process20 ;
+        vad:hasNext vad:Process25 .
+
+    # Процесс 25
+    vad:Process25 rdf:type vad:Process ;
+        rdfs:label "Процесс 25" ;
+        dcterms:description "Пятый процесс в цепочке TriG11" ;
+        vad:hasExecutor vad:ExecutorGroup25 ;
+        vad:hasParent vad:Process20 ;
+        vad:hasNext vad:Process26 .
+
+    # Процесс 26
+    vad:Process26 rdf:type vad:Process ;
+        rdfs:label "Процесс 26" ;
+        dcterms:description "Шестой процесс в цепочке TriG11" ;
+        vad:hasExecutor vad:ExecutorGroup26 ;
+        vad:hasParent vad:Process20 ;
+        vad:hasNext vad:Process27 .
+
+    # Процесс 27
+    vad:Process27 rdf:type vad:Process ;
+        rdfs:label "Процесс 27" ;
+        dcterms:description "Седьмой процесс в цепочке TriG11" ;
+        vad:hasExecutor vad:ExecutorGroup27 ;
+        vad:hasParent vad:Process20 ;
+        vad:hasNext vad:Process28 .
+
+    # Процесс 28
+    vad:Process28 rdf:type vad:Process ;
+        rdfs:label "Процесс 28" ;
+        dcterms:description "Заключительный процесс в цепочке TriG11" ;
+        vad:hasExecutor vad:ExecutorGroup28 ;
+        vad:hasParent vad:Process20 .
+
+    # Группы исполнителей для TriG11
+    vad:ExecutorGroup21 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 21" ;
+        vad:includes vad:Executor21 .
+
+    vad:ExecutorGroup22 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 22" ;
+        vad:includes vad:Executor21, vad:Executor22 .
+
+    vad:ExecutorGroup23 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 23" ;
+        vad:includes vad:Executor23 .
+
+    vad:ExecutorGroup24 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 24" ;
+        vad:includes vad:Executor23, vad:Executor24 .
+
+    vad:ExecutorGroup25 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 25" ;
+        vad:includes vad:Executor25, vad:Executor26 .
+
+    vad:ExecutorGroup26 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 26" ;
+        vad:includes vad:Executor27, vad:Executor28 .
+
+    vad:ExecutorGroup27 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 27" ;
+        vad:includes vad:Executor21, vad:Executor25 .
+
+    vad:ExecutorGroup28 rdf:type vad:ExecutorGroup ;
+        rdfs:label "Группа исполнителей процесса Процесс 28" ;
+        vad:includes vad:Executor22, vad:Executor27 .
+
+    # Исполнители для TriG11
+    vad:Executor21 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 21" .
+
+    vad:Executor22 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 22" .
+
+    vad:Executor23 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 23" .
+
+    vad:Executor24 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 24" .
+
+    vad:Executor25 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 25" .
+
+    vad:Executor26 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 26" .
+
+    vad:Executor27 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 27" .
+
+    vad:Executor28 rdf:type vad:Executor ;
+        rdfs:label "Исполнитель 28" .
+}`;
+
+            document.getElementById('rdf-input').value = exampleTrigVADv2;
+            document.getElementById('input-format').value = 'trig';
+            document.getElementById('visualization-mode').value = 'vad-trig';
             updateModeDescription();
         }
 
@@ -3049,13 +3907,14 @@ vad:Trig1 {
                 'notation': 'С выделением типов объектов и предикатов цветом и формами',
                 'base': 'Базовый режим без специальных стилей',
                 'aggregation': 'Литералы агрегируются в узел субъекта',
-                'vad': 'VAD: процессы как cds-фигуры с исполнителями'
+                'vad': 'VAD: процессы как cds-фигуры с исполнителями',
+                'vad-trig': 'VAD TriG: иерархия TriG с деревом и свойствами'
             };
 
             description.textContent = descriptions[mode] || '';
 
-            // Показываем/скрываем параметр "Макс. длина VAD" только для режима VAD
-            if (mode === 'vad') {
+            // Показываем/скрываем параметр "Макс. длина VAD" для режимов VAD и VAD TriG
+            if (mode === 'vad' || mode === 'vad-trig') {
                 maxVadRowLengthGroup.style.display = 'block';
             } else {
                 maxVadRowLengthGroup.style.display = 'none';
@@ -3157,6 +4016,108 @@ vad:Trig1 {
                         return;
                     }
                 }
+
+                // Обработка режима VAD TriG
+                if (currentMode === 'vad-trig') {
+                    // Парсим иерархию TriG графов
+                    const hierarchyResult = parseTriGHierarchy(quads, prefixes);
+
+                    if (!hierarchyResult.valid) {
+                        showValidationError(formatVADTriGErrors(hierarchyResult.errors));
+                        toggleVADTriGPanels(false);
+                        button.disabled = false;
+                        button.textContent = 'Визуализировать';
+                        return;
+                    }
+
+                    // Сохраняем иерархию
+                    trigHierarchy = hierarchyResult.hierarchy;
+
+                    // Выбираем корневой TriG для начального отображения
+                    selectedTrigUri = hierarchyResult.rootTrigUri;
+
+                    // Показываем панели VAD TriG
+                    toggleVADTriGPanels(true);
+
+                    // Отображаем дерево TriG
+                    displayTriGTree(trigHierarchy, selectedTrigUri, prefixes);
+
+                    // Отображаем свойства корневого TriG
+                    displayTriGProperties(selectedTrigUri, trigHierarchy, prefixes);
+
+                    // Валидация VAD для квадов корневого графа
+                    const rootGraphInfo = trigHierarchy[selectedTrigUri];
+                    if (rootGraphInfo) {
+                        const validation = validateVAD(rootGraphInfo.quads, prefixes);
+                        if (!validation.valid) {
+                            showValidationError(formatVADErrors(validation.errors));
+                            button.disabled = false;
+                            button.textContent = 'Визуализировать';
+                            return;
+                        }
+                    }
+
+                    // Продолжаем с квадами только из выбранного графа
+                    activeFilters = [...getFilterConfig('vad').hiddenPredicates];
+
+                    const filteredQuads = rootGraphInfo.quads.filter(quad => {
+                        const predicateUri = quad.predicate.value;
+                        const predicateLabel = getPrefixedName(predicateUri, prefixes);
+                        return !isPredicateHidden(predicateUri, predicateLabel);
+                    });
+
+                    // Временно переключаемся в режим VAD для генерации DOT
+                    const originalQuads = currentQuads;
+                    currentQuads = rootGraphInfo.quads;
+                    currentMode = 'vad';
+
+                    const dotCode = rdfToDot(filteredQuads, prefixes);
+                    currentDotCode = dotCode;
+                    console.log('VAD TriG - Сгенерированный DOT-код:', dotCode);
+
+                    currentQuads = originalQuads;
+                    currentMode = 'vad-trig';
+
+                    const viz = await Viz.instance();
+                    const svgString = viz.renderString(dotCode, {
+                        format: 'svg',
+                        engine: layoutEngine
+                    });
+
+                    const output = document.getElementById('output');
+                    currentScale = 1.0;
+                    applyZoom();
+
+                    if (outputFormat === 'svg') {
+                        output.innerHTML = svgString;
+                        currentSvgElement = output.querySelector('svg');
+                        document.getElementById('export-buttons').style.display = 'block';
+                        document.getElementById('zoom-controls').style.display = 'flex';
+                    } else if (outputFormat === 'png') {
+                        const pngDataUrl = await svgToPng(svgString);
+                        output.innerHTML = `<img src="${pngDataUrl}" alt="RDF Graph" style="max-width: 100%;">`;
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = svgString;
+                        currentSvgElement = tempDiv.querySelector('svg');
+                        document.getElementById('export-buttons').style.display = 'block';
+                        document.getElementById('zoom-controls').style.display = 'flex';
+                    }
+
+                    displayLegend();
+                    displayPrefixes(prefixes);
+                    displayFilters();
+                    addNodeClickHandlers();
+                    closeAllPropertiesPanels();
+
+                    console.log(`VAD TriG: Обработано ${quads.length} триплетов, отображается граф ${getPrefixedName(selectedTrigUri, prefixes)}`);
+
+                    button.disabled = false;
+                    button.textContent = 'Визуализировать';
+                    return;
+                }
+
+                // Скрываем панели VAD TriG для других режимов
+                toggleVADTriGPanels(false);
 
                 activeFilters = [...getFilterConfig(currentMode).hiddenPredicates];
 
@@ -3671,7 +4632,7 @@ vad:Trig1 {
             // Получаем режим визуализации
             if (urlParams.has('mode')) {
                 const modeParam = urlParams.get('mode');
-                const validModes = ['notation', 'base', 'aggregation', 'vad'];
+                const validModes = ['notation', 'base', 'aggregation', 'vad', 'vad-trig'];
                 if (validModes.includes(modeParam)) {
                     params.mode = modeParam;
                 }
