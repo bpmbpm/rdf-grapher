@@ -3192,17 +3192,19 @@ vad:Trig1 {
 # ============================================================================
 # Корневой TriG граф: Trig1 (hasParent = root)
 # ============================================================================
-vad:Trig1 rdfs:label "Схема процесса TriG1" ;
+
+
+vad:t1 {
+vad:t1 rdfs:label "Схема процесса TriG1" ;
     vad:hasParent vad:root .
 
-vad:Trig1 {
     # Материнский процесс (не отображается в VAD режиме)
-    vad:Process0 rdf:type vad:Process ;
-        rdfs:label "Процесс 0" ;
-        dcterms:description "Материнский процесс для всей цепочки" .
+   # vad:Process0 rdf:type vad:Process ;
+   #     rdfs:label "Процесс 0" ;
+   #     dcterms:description "Материнский процесс для всей цепочки" .
 
     # Процесс 1
-    vad:Process1 rdf:type vad:Process ;
+    vad:p1 rdf:type vad:Process ;
         rdfs:label "Процесс 1" ;
         dcterms:description "Первый процесс в цепочке добавленной стоимости" ;
         vad:hasExecutor vad:ExecutorGroup1 ;
@@ -3327,19 +3329,20 @@ vad:Trig1 {
 # Дочерний TriG граф: Trig11 (hasParent = Trig1)
 # Все объекты имеют префикс 2 в номерах (Process21, Исполнитель 21 и т.д.)
 # ============================================================================
-vad:Trig11 rdfs:label "Схема процесса TriG11" ;
-    vad:hasParent vad:Trig1 .
 
-vad:Trig11 {
+vad:t1.1 {
+vad:t1.1 rdfs:label "Схема процесса TriG1.1" ;
+    vad:hasParent vad:t1 .
+
     # Материнский процесс (не отображается в VAD режиме)
     vad:Process20 rdf:type vad:Process ;
         rdfs:label "Процесс 20" ;
-        dcterms:description "Материнский процесс для цепочки TriG11" .
+        dcterms:description "Материнский процесс для цепочки TriG1.1" .
 
     # Процесс 21
     vad:Process21 rdf:type vad:Process ;
         rdfs:label "Процесс 21" ;
-        dcterms:description "Первый процесс в цепочке TriG11" ;
+        dcterms:description "Первый процесс в цепочке TriG1.1" ;
         vad:hasExecutor vad:ExecutorGroup21 ;
         vad:hasParent vad:Process20 ;
         vad:hasNext vad:Process22 .
@@ -3347,7 +3350,7 @@ vad:Trig11 {
     # Процесс 22
     vad:Process22 rdf:type vad:Process ;
         rdfs:label "Процесс 22" ;
-        dcterms:description "Второй процесс в цепочке TriG11" ;
+        dcterms:description "Второй процесс в цепочке TriG1.1" ;
         vad:hasExecutor vad:ExecutorGroup22 ;
         vad:hasParent vad:Process20 ;
         vad:hasNext vad:Process23, vad:Process24 .
@@ -3355,7 +3358,7 @@ vad:Trig11 {
     # Процесс 23
     vad:Process23 rdf:type vad:Process ;
         rdfs:label "Процесс 23" ;
-        dcterms:description "Третий процесс в цепочке TriG11" ;
+        dcterms:description "Третий процесс в цепочке TriG1.1" ;
         vad:hasExecutor vad:ExecutorGroup23 ;
         vad:hasParent vad:Process20 ;
         vad:hasNext vad:Process24 .
@@ -3363,7 +3366,7 @@ vad:Trig11 {
     # Процесс 24
     vad:Process24 rdf:type vad:Process ;
         rdfs:label "Процесс 24" ;
-        dcterms:description "Четвёртый процесс в цепочке TriG11" ;
+        dcterms:description "Четвёртый процесс в цепочке TriG1.1" ;
         vad:hasExecutor vad:ExecutorGroup24 ;
         vad:hasParent vad:Process20 ;
         vad:hasNext vad:Process25 .
@@ -3371,7 +3374,7 @@ vad:Trig11 {
     # Процесс 25
     vad:Process25 rdf:type vad:Process ;
         rdfs:label "Процесс 25" ;
-        dcterms:description "Пятый процесс в цепочке TriG11" ;
+        dcterms:description "Пятый процесс в цепочке TriG1.1" ;
         vad:hasExecutor vad:ExecutorGroup25 ;
         vad:hasParent vad:Process20 ;
         vad:hasNext vad:Process26 .
@@ -3379,7 +3382,7 @@ vad:Trig11 {
     # Процесс 26
     vad:Process26 rdf:type vad:Process ;
         rdfs:label "Процесс 26" ;
-        dcterms:description "Шестой процесс в цепочке TriG11" ;
+        dcterms:description "Шестой процесс в цепочке TriG1.1" ;
         vad:hasExecutor vad:ExecutorGroup26 ;
         vad:hasParent vad:Process20 ;
         vad:hasNext vad:Process27 .
@@ -3387,7 +3390,7 @@ vad:Trig11 {
     # Процесс 27
     vad:Process27 rdf:type vad:Process ;
         rdfs:label "Процесс 27" ;
-        dcterms:description "Седьмой процесс в цепочке TriG11" ;
+        dcterms:description "Седьмой процесс в цепочке TriG1.1" ;
         vad:hasExecutor vad:ExecutorGroup27 ;
         vad:hasParent vad:Process20 ;
         vad:hasNext vad:Process28 .
@@ -3395,7 +3398,7 @@ vad:Trig11 {
     # Процесс 28
     vad:Process28 rdf:type vad:Process ;
         rdfs:label "Процесс 28" ;
-        dcterms:description "Заключительный процесс в цепочке TriG11" ;
+        dcterms:description "Заключительный процесс в цепочке TriG1.1" ;
         vad:hasExecutor vad:ExecutorGroup28 ;
         vad:hasParent vad:Process20 .
 
