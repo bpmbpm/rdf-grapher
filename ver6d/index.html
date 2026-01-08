@@ -1546,12 +1546,21 @@ WHERE {
         // ============================================================================
 
         const VADNodeStyles = {
-            'ProcessStyle': {
+            'ProcessStyleBasic': {
                 types: ['vad:Process', 'http://example.org/vad#Process'],
-                // cds shape (chevron) с зелёной заливкой
+                subtypes: ['vad:Basic', 'http://example.org/vad#Basic'],
+                // cds shape (chevron) с зелёной заливкой для базового типа
                 dot: 'shape="cds" height="0.8" width="1.5" color="#2E7D32" fillcolor="#A5D6A7" fontname="Arial" fontsize="11" style="filled"',
-                label: 'Процесс (vad:Process)',
-                description: 'Бизнес-процесс в VAD диаграмме'
+                label: 'Процесс Базовый (vad:Basic)',
+                description: 'Базовый бизнес-процесс в VAD диаграмме'
+            },
+            'ProcessStyleDetailed': {
+                types: ['vad:Process', 'http://example.org/vad#Process'],
+                subtypes: ['vad:Detailed', 'http://example.org/vad#Detailed'],
+                // cds shape (chevron) с голубой заливкой для детализированного типа
+                dot: 'shape="cds" height="0.8" width="1.5" color="#1565C0" fillcolor="#90CAF9" fontname="Arial" fontsize="11" style="filled"',
+                label: 'Процесс Детализированный (vad:Detailed)',
+                description: 'Детализированный бизнес-процесс в VAD диаграмме'
             },
             'ExecutorGroupStyle': {
                 types: ['vad:ExecutorGroup', 'http://example.org/vad#ExecutorGroup'],
@@ -1654,6 +1663,7 @@ WHERE {
         let currentScale = 1.0;
         let currentPrefixes = {};
         let nodeTypesCache = {};
+        let nodeSubtypesCache = {};
         let currentQuads = [];
         let nodeLabelToUri = {};
         let selectedNodeElement = null;
@@ -2291,15 +2301,43 @@ WHERE {
                 return AggregationNodeStyles['default'].dot;
             }
 
-            if (currentMode === 'vad') {
+            if (currentMode === 'vad' || currentMode === 'vad-trig') {
                 if (isBlankNode) return VADNodeStyles['default'].dot;
                 const nodeTypes = nodeTypesCache[nodeUri] || [];
+                const nodeSubtypes = nodeSubtypesCache[nodeUri] || [];
+
+                // First, check styles that have subtypes defined (ProcessStyleBasic, ProcessStyleDetailed)
                 for (const [styleName, styleConfig] of Object.entries(VADNodeStyles)) {
                     if (styleName === 'default') continue;
+                    if (!styleConfig.subtypes) continue; // Skip styles without subtypes
+
+                    // Check if node has matching type
+                    const hasMatchingType = styleConfig.types.some(type => nodeTypes.includes(type));
+                    if (!hasMatchingType) continue;
+
+                    // Check if node has matching subtype
+                    const hasMatchingSubtype = styleConfig.subtypes.some(subtype => nodeSubtypes.includes(subtype));
+                    if (hasMatchingSubtype) return styleConfig.dot;
+                }
+
+                // Then, check styles without subtypes (ExecutorGroupStyle, ExecutorStyle, etc.)
+                for (const [styleName, styleConfig] of Object.entries(VADNodeStyles)) {
+                    if (styleName === 'default') continue;
+                    if (styleConfig.subtypes) continue; // Skip styles with subtypes (already checked)
+
                     for (const type of styleConfig.types) {
                         if (nodeTypes.includes(type)) return styleConfig.dot;
                     }
                 }
+
+                // For Process nodes without explicit subtype, default to ProcessStyleBasic
+                const isProcess = nodeTypes.some(t =>
+                    t === 'vad:Process' || t === 'http://example.org/vad#Process'
+                );
+                if (isProcess) {
+                    return VADNodeStyles['ProcessStyleBasic'].dot;
+                }
+
                 return VADNodeStyles['default'].dot;
             }
 
@@ -2347,16 +2385,22 @@ WHERE {
 
         function buildNodeTypesCache(quads, prefixes) {
             nodeTypesCache = {};
+            nodeSubtypesCache = {};
             const typePredicates = [
                 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
                 'rdf:type',
                 'a'
+            ];
+            const subtypePredicates = [
+                'http://example.org/vad#processSubtype',
+                'vad:processSubtype'
             ];
 
             quads.forEach(quad => {
                 const predicateValue = quad.predicate.value;
                 const predicateLabel = getPrefixedName(predicateValue, prefixes);
 
+                // Build types cache
                 if (typePredicates.includes(predicateValue) ||
                     typePredicates.includes(predicateLabel) ||
                     predicateLabel === 'a') {
@@ -2374,6 +2418,26 @@ WHERE {
                     }
                     if (!nodeTypesCache[subjectUri].includes(typeLabel)) {
                         nodeTypesCache[subjectUri].push(typeLabel);
+                    }
+                }
+
+                // Build subtypes cache for vad:processSubtype
+                if (subtypePredicates.includes(predicateValue) ||
+                    subtypePredicates.includes(predicateLabel)) {
+
+                    const subjectUri = quad.subject.value;
+                    const subtypeUri = quad.object.value;
+                    const subtypeLabel = getPrefixedName(subtypeUri, prefixes);
+
+                    if (!nodeSubtypesCache[subjectUri]) {
+                        nodeSubtypesCache[subjectUri] = [];
+                    }
+
+                    if (!nodeSubtypesCache[subjectUri].includes(subtypeUri)) {
+                        nodeSubtypesCache[subjectUri].push(subtypeUri);
+                    }
+                    if (!nodeSubtypesCache[subjectUri].includes(subtypeLabel)) {
+                        nodeSubtypesCache[subjectUri].push(subtypeLabel);
                     }
                 }
             });
