@@ -1365,7 +1365,11 @@ WHERE {
             'vad:hasParent',
             'http://example.org/vad#hasParent',
             'vad:includes',
-            'http://example.org/vad#includes'
+            'http://example.org/vad#includes',
+            'vad:processSubtype',
+            'http://example.org/vad#processSubtype',
+            'vad:hasTrig',
+            'http://example.org/vad#hasTrig'
         ];
 
         /**
@@ -1454,7 +1458,8 @@ WHERE {
             message += `Всего ошибок: ${errors.length}\n`;
             message += '\nРазрешенные типы: vad:Process, vad:ExecutorGroup, vad:Executor\n';
             message += 'Разрешенные предикаты: rdf:type, rdfs:label, dcterms:description,\n';
-            message += '  vad:hasNext, vad:hasExecutor, vad:hasParent, vad:includes';
+            message += '  vad:hasNext, vad:hasExecutor, vad:hasParent, vad:includes,\n';
+            message += '  vad:processSubtype, vad:hasTrig';
 
             return message;
         }
