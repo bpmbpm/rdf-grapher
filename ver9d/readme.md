@@ -28,3 +28,4 @@ https://bpmbpm.github.io/rdf-grapher/ver9d/
 
 ### also
 - https://github.com/bpmbpm/rdf-grapher/tree/main/ver8tree
+- https://github.com/bpmbpm/SemanticBPM
