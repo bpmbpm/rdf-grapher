@@ -1,4 +1,4 @@
-### ver8a
+### ver8a (del)
 only SPARQL Smart Design + Ontology + file   
 
 ### run
