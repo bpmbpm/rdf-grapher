@@ -12,7 +12,7 @@ RDF Grapher ver4p — сервис для парсинга RDF данных и �
 https://bpmbpm.github.io/rdf-grapher/ver4p/
 
 ### problem
-- "Режим VAD" похоже еще не работает
+- "Режим VAD" - работает, если выбран был "Turtle VAD"
 
 ### dot
 - [xlabel GraphvizOnline](
