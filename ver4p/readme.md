@@ -24,3 +24,6 @@ https://dreampuf.github.io/GraphvizOnline/?engine=dot#digraph%20G%20%7B%0A%0A%20
 - https://lib.custis.ru/Graphviz
 - https://graphviz.org/doc/info/shapes.html
 
+### alt
+- [Осторожная попытка переосмыслить сложное: Как связать документы, диаграммы и знания?](https://habr.com/ru/articles/1079138/)
+- [Проект Xanadu: концепция интернета, которая 50 лет была в разработке и за это время сильно устарела](https://thecode.media/proekt-xanadu-kontseptsiya-interneta-kotoraya-ustarela/)
