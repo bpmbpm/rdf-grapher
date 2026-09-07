@@ -34,3 +34,5 @@ https://dreampuf.github.io/GraphvizOnline/?engine=dot#digraph%20G%20%7B%0A%0A%20
 - [Проект Xanadu: концепция интернета, которая 50 лет была в разработке и за это время сильно устарела](https://thecode.media/proekt-xanadu-kontseptsiya-interneta-kotoraya-ustarela/)
 ### rdf
 - [ОНТОЛОГИЧЕСКОЕ МОДЕЛИРОВАНИЕ](https://trinidata.ru/files/SemanticIntro.pdf)
+- [Графы Знаний (часть 1/3)](https://se.moevm.pro/lib/exe/fetch.php/courses:smart_data:tr-%D0%BB%D0%B5%D0%BA%D1%86%D0%B8%D1%8F-3-knowledge_graphs_rus_-part_1.pdf)
+- [Как онтология помогает представить структуру данных и семантику приложения](https://habr.com/ru/companies/vktech/articles/948492/)
